@@ -15,12 +15,13 @@ $resourceToExport = [
     [ 'bundleNameMatch'=>'/^a\/icon_icon_equipment_\d+\.unity3d$/', 'nameMatch'=>'/^icon_equipment_(\d+)$/i', 'exportTo'=>'icon/equipment/$1' ],
     [ 'bundleNameMatch'=>'/^a\/icon_icon_item_\d+\.unity3d$/', 'nameMatch'=>'/^icon_item_(\d+)$/i', 'exportTo'=>'icon/item/$1' ],
     [ 'bundleNameMatch'=>'/^a\/icon_unit_plate_\d+\.unity3d$/',     'nameMatch'=>'/^unit_plate_(\d+)$/i',     'exportTo'=>'icon/plate/$1' ],
+    [ 'bundleNameMatch'=>'/^a\/icon_icon_emblem_\d+\.unity3d$/',     'nameMatch'=>'/^icon_emblem_(\d+)$/i',     'exportTo'=>'icon/emblem/$1', 'extraParam'=>'-s 365x64' ], //274x48 in game
   ],
   'unit'=>[
     [ 'bundleNameMatch'=>'/^a\/unit_icon_unit_\d+\.unity3d$/',      'nameMatch'=>'/^icon_unit_(\d+)$/i',      'exportTo'=>'icon/unit/$1' ],
     [ 'bundleNameMatch'=>'/^a\/unit_icon_shadow_\d+\.unity3d$/',    'nameMatch'=>'/^icon_shadow_(\d+)$/i',    'exportTo'=>'icon/unit_shadow/$1' ],
     [ 'bundleNameMatch'=>'/^a\/unit_thumb_actual_unit_profile_\d+\.unity3d$/',    'nameMatch'=>'/^thumb_actual_unit_profile_(\d+)$/i',    'exportTo'=>'card/actual_profile/$1', 'extraParam'=>'-s 1024x682' ],
-    [ 'bundleNameMatch'=>'/^a\/unit_thumb_unit_profile_\d+\.unity3d$/',           'nameMatch'=>'/^thumb_unit_profile_(\d+)$/i',           'exportTo'=>'card/profile/$1',        'extraParam'=>'-s 1024x682' ],
+    [ 'bundleNameMatch'=>'/^a\/unit_thumb_unit_profile_\d+\.unity3d$/',           'nameMatch'=>'/^thumb_unit_profile_(\d+)$/i',           'exportTo'=>'card/profile/$1'],
   ],
   'comic'=>[
     [ 'bundleNameMatch'=>'/^a\/comic_comic_l_\d+_\d+.unity3d$/',      'nameMatch'=>'/^comic_l_(\d+_\d+)$/i',      'exportTo'=>'comic/$1', 'extraParam'=>'-s 682x512' ],
@@ -45,6 +46,7 @@ $resourceToExport = [
     [ 'bundleNameMatch'=>'/^v\/t\/vo_adv_(\d+)\.acb$/', 'exportTo'=> 'sound/story_vo/$1' ],
     [ 'bundleNameMatch'=>'/^v\/vo_btl_(\d+)\.acb$/', 'exportTo'=> 'sound/unit_battle_voice/$1' ],
     [ 'bundleNameMatch'=>'/^v\/vo_(ci|speciallogin|btg)_(\d+)\.acb$/', 'exportTo'=> 'sound/vo_$1/$2' ],
+    [ 'bundleNameMatch'=>'/^b\/bgm_(.*)\.acb$/', 'exportTo'=> 'bgm/bgm_$1' ],
   ],
   'movie'=>[
     [ 'bundleNameMatch'=>'/^m\/(t\/)?(.+?)_(\d[\d_]*)\.usm$/', 'exportTo'=> 'movie/$2/$3' ],
