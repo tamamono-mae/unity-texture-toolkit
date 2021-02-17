@@ -749,7 +749,7 @@ class Texture2D {
       } else {
         $this->imageData = $stream->readData($this->imageDataSize);
       }
-      
+
 			switch ($this->textureFormat) {
         case TextureFormat::ASTC_RGBA_4x4:
         case TextureFormat::ASTC_RGB_5x5:
@@ -796,6 +796,7 @@ class Texture2D {
   }
 
   function exportTo($saveTo, $format = 'png', $extraEncodeParam = '') {
+    //echo "exportTo\n";
     if ($this->outputMethod == 'astcenc') {
       fclose(fopen('output.astc','wb'));
       $astc = new FileStream('output.astc');
@@ -819,10 +820,11 @@ class Texture2D {
       $astc->write(hex2bin('010000'));
       $astc->write($this->imageData);
       unset($astc);
-      exec('astcenc -d output.astc output.tga -silentmode');
+      exec('astcenc -dl output.astc output.tga -yflip -silent');
       unlink('output.astc');
       $transcodeFile = 'output.tga';
     } else if ($this->outputMethod == 'bmp') {
+      //echo "bmp\n";
       $width = $this->width;
       $height = $this->height;
       $bmp = new MemoryStream('BM');
@@ -837,7 +839,7 @@ class Texture2D {
       $bmp->write(hex2bin('2000'));     //bitdepth
       $bmp->write(hex2bin('00000000')); //compression
       $bmp->write(pack('V', strlen($this->imageData)*32/$this->bitDepth));
-      $bmp->write(hex2bin('00000000000000000000000000000000')); //hoz resolution + ver resolution + color num + important color num    
+      $bmp->write(hex2bin('00000000000000000000000000000000')); //hoz resolution + ver resolution + color num + important color num
       $bmp->write(
         swapRGB($this->textureFormat, $this->imageData)
       );
@@ -1134,7 +1136,7 @@ class ClassStructHelper {
     $currentLevel = [];
     $subLevels = [];
     $lastMember = NULL;
-    
+
     foreach ($deserializedStruct as $member) {
       if ($member['level'] == $level) {
         if (!empty($subLevels)) {

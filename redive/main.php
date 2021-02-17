@@ -1,8 +1,11 @@
 <?php
 chdir(__DIR__);
 require_once 'UnityBundle.php';
+//define('RESOURCE_PATH_PREFIX', 'data/web/redive/');
 require_once 'resource_fetch.php';
 require_once 'diff_parse.php';
+print("root\n");
+
 if (!file_exists('last_version')) {
   $last_version = array('TruthVersion'=>0,'hash'=>'');
 } else {
@@ -14,7 +17,10 @@ function _log($s) {
   fwrite($logFile, date('[m/d H:i] ').$s."\n");
   echo $s."\n";
 }
+global $last_version;
+var_dump($last_version);
 function execQuery($db, $query) {
+	//print("execQuery\n");
   $returnVal = [];
   /*if ($stmt = $db->prepare($query)) {
     $result = $stmt->execute();
@@ -33,6 +39,7 @@ function execQuery($db, $query) {
   return $returnVal;
 }
 function autoProxy() {
+	print("autoProxy\n");
   $curl = curl_init();
   curl_setopt_array($curl, [
     CURLOPT_URL=>'https://free-proxy-list.net/',
@@ -67,7 +74,7 @@ function autoProxy() {
       $oldproxy = file_get_contents('currentproxy.txt');
       list($ip, $port) = explode(':', $oldproxy);
       $search  = [' -d '.$ip.' --dport '.$port.' ', ' --to-destination '.$ip.':'.$port];
-      
+
       list($ip, $port) = explode(':', $proxy);
       $replace = [' -d '.$ip.' --dport '.$port.' ', ' --to-destination '.$ip.':'.$port];
       file_put_contents('/etc/firewalld/direct.xml', str_replace($search, $replace, file_get_contents('/etc/firewalld/direct.xml')));
@@ -82,14 +89,17 @@ function autoProxy() {
 }
 
 function encodeValue($value) {
+	//print("encodeValue\n");
   $arr = [];
   foreach ($value as $key=>$val) {
     $arr[] = '/*'.$key.'*/' . (is_numeric($val) ? $val : ('"'.str_replace('"','\\"',$val).'"'));
   }
   return implode(", ", $arr);
 }
+
 function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
-  exec('git diff --cached | sed -e "s/@@ -1 +1 @@/@@ -1,1 +1,1 @@/g" >a.diff');
+	print("do_commit\n");
+  //exec('git diff --cached | sed -e "s/@@ -1 +1 @@/@@ -1,1 +1,1 @@/g" >a.diff');
   $versionDiff = parse_db_diff('a.diff', $db, [
     'clan_battle_period.sql' => 'diff_clan_battle', // clan_battle
     'dungeon_area_data.sql' => 'diff_dungeon_area', // dungeon_area
@@ -104,6 +114,7 @@ function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
     'campaign_schedule.sql' => 'diff_campaign',     // campaign
   ]);
   unlink('a.diff');
+
   $versionDiff['ver'] = $TruthVersion.$extraMsg;
   $versionDiff['time'] = time();
   $versionDiff['timeStr'] = date('Y-m-d H:i', $versionDiff['time'] + 3600);
@@ -178,13 +189,14 @@ function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
   $stmt = $diff_db->prepare('REPLACE INTO redive ('.implode(',', $col).') VALUES ('.implode(',', array_map(function (){return '?';}, $val)).')');
   $stmt->execute($val);
   exec('git push origin master');
-  
+
   $data = json_encode(array(
     'game'=>'redive',
     'hash'=>$hash[0],
     'ver' =>$TruthVersion.$extraMsg,
     'data'=>$diff_send
   ));
+  /*
   $header = [
     'X-GITHUB-EVENT: push_direct_message',
     'X-HUB-SIGNATURE: sha1='.hash_hmac('sha1', $data, file_get_contents(__DIR__.'/../webhook_secret'), false)
@@ -201,11 +213,13 @@ function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
   ));
   curl_exec($curl);
   curl_close($curl);
+  */
 }
 
 function main() {
+	print("main\n");
 
-global $last_version;
+
 chdir(__DIR__);
 
 //check app ver at 00:00
@@ -229,12 +243,14 @@ if ($appinfo !== false) {
     if (version_compare($prevappver,$appver, '<')) {
       file_put_contents('appver', $appver);
       _log('new game version: '. $appver);
+
       $data = json_encode(array(
         'game'=>'redive',
         'ver'=>$appver,
         'link'=>'https://itunes.apple.com/jp/app/id'.$itunesid,
         'desc'=>$appinfo['results'][0]['releaseNotes']
       ));
+	  /*
       $header = [
         'X-GITHUB-EVENT: app_update',
         'X-HUB-SIGNATURE: sha1='.hash_hmac('sha1', $data, file_get_contents(__DIR__.'/../webhook_secret'), false)
@@ -251,7 +267,7 @@ if ($appinfo !== false) {
       ));
       curl_exec($curl);
       curl_close($curl);
-
+		*/
       // fetch bundle manifest
       $curl = curl_init();
       curl_setopt_array($curl, array(
@@ -263,8 +279,8 @@ if ($appinfo !== false) {
       $manifest = curl_exec($curl);
       file_put_contents('data/+manifest_bundle.txt', $manifest);
       chdir('data');
-      exec('git add +manifest_bundle.txt');
-      exec('git commit -m "bundle manifest v'.$appver.'"');
+      //exec('git add +manifest_bundle.txt');
+      //exec('git commit -m "bundle manifest v'.$appver.'"');
       chdir(__DIR__);
     }
   }
@@ -370,6 +386,11 @@ $TruthVersion = $response['data_headers']['required_res_ver'];
 //if (file_exists('stop_cron')) return;
 
 // guess latest res_ver
+if (!file_exists('last_version')) {
+  $last_version = array('TruthVersion'=>0,'hash'=>'');
+} else {
+  $last_version = json_decode(file_get_contents('last_version'), true);
+}
 global $curl;
 $curl = curl_init();
 curl_setopt_array($curl, array(
@@ -379,17 +400,21 @@ curl_setopt_array($curl, array(
 ));
 $TruthVersion = $last_version['TruthVersion'];
 $current_ver = $TruthVersion|0;
-
+//$current_ver = $TruthVersion|0;
+print("current_ver=".$current_ver."\n");
 for ($i=1; $i<=20; $i++) {
   $guess = $current_ver + $i * 10;
+  print("guess=".$guess."\n");
   curl_setopt($curl, CURLOPT_URL, 'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$guess.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest');
   curl_exec($curl);
   $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
   if ($code == 200) {
     $TruthVersion = $guess.'';
+	print("TruthVersion=".$TruthVersion."\n");
     break;
   }
 }
+
 curl_close($curl);
 if ($TruthVersion == $last_version['TruthVersion']) {
   _log('no update found');
@@ -397,7 +422,7 @@ if ($TruthVersion == $last_version['TruthVersion']) {
 }
 $last_version['TruthVersion'] = $TruthVersion;
 _log("TruthVersion: ${TruthVersion}");
-file_put_contents('data/!TruthVersion.txt', $TruthVersion."\n");
+file_put_contents('data/TruthVersion.txt', $TruthVersion."\n");
 
 //$TruthVersion = '10000000';
 $curl = curl_init();
@@ -425,25 +450,27 @@ foreach (explode("\n", trim($manifest)) as $line) {
 curl_setopt($curl, CURLOPT_URL, 'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Sound/manifest/sound2manifest');
 $manifest = curl_exec($curl);
 file_put_contents('data/+manifest_sound.txt', $manifest);
-curl_setopt($curl, CURLOPT_URL, 'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Movie/SP/High/manifest/moviemanifest');
+curl_setopt($curl, CURLOPT_URL, 'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Movie/PC/High/manifest/moviemanifest');
 $manifest = curl_exec($curl);
 file_put_contents('data/+manifest_movie.txt', $manifest);
-curl_setopt($curl, CURLOPT_URL, 'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Movie/SP/Low/manifest/moviemanifest');
+curl_setopt($curl, CURLOPT_URL, 'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Movie/PC/Low/manifest/moviemanifest');
 $manifest = curl_exec($curl);
 file_put_contents('data/+manifest_movie_low.txt', $manifest);
 
 $manifest = file_get_contents('data/+manifest_masterdata.txt');
 $manifest = array_map(function ($i){ return explode(',', $i); }, explode("\n", $manifest));
+echo "cdb check\n";
 foreach ($manifest as $entry) {
   if ($entry[0] === 'a/masterdata_master_0003.cdb') { $manifest = $entry; break; }
 }
+echo "cdb ok\n";
 if ($manifest[0] !== 'a/masterdata_master_0003.cdb') {
   _log('masterdata_master_0003.cdb not found');
   //file_put_contents('stop_cron', '');
   file_put_contents('last_version', json_encode($last_version));
   chdir('data');
-  exec('git add !TruthVersion.txt +manifest_*.txt');
-  do_commit($TruthVersion, NULL, ' (no master db)');
+  //exec('git add !TruthVersion.txt +manifest_*.txt');
+  //do_commit($TruthVersion, NULL, ' (no master db)');
   checkAndUpdateResource($TruthVersion);
   return;
 }
@@ -453,8 +480,8 @@ if ($last_version['hash'] == $bundleHash) {
   _log("Same hash as last version ${bundleHash}");
   file_put_contents('last_version', json_encode($last_version));
   chdir('data');
-  exec('git add !TruthVersion.txt +manifest_*.txt');
-  do_commit($TruthVersion);
+  //exec('git add !TruthVersion.txt +manifest_*.txt');
+  //do_commit($TruthVersion);
   return;
 }
 $last_version['hash'] = $bundleHash;
@@ -475,6 +502,7 @@ if ($downloadedSize != $bundleSize || $downloadedHash != $bundleHash) {
 }
 
 //extract db
+echo "extract\n";
 _log('dumping cdb');
 file_put_contents('master.cdb', $bundle);
 unset($bundle);
@@ -486,7 +514,7 @@ if (!file_exists('master.mdb')) {
 unlink('master.cdb');
 rename('master.mdb', 'redive.db');
 $dbData = file_get_contents('redive.db');
-file_put_contents('redive.db.br', brotli_compress($dbData, 9));
+//file_put_contents('redive.db.br', brotli_compress($dbData, 9));
 
 //dump sql
 _log('dumping sql');
@@ -551,8 +579,8 @@ unset($name);
 file_put_contents('last_version', json_encode($last_version));
 
 chdir('data');
-exec('git add *.sql !TruthVersion.txt +manifest_*.txt');
-do_commit($TruthVersion, $db);
+//exec('git add *.sql !TruthVersion.txt +manifest_*.txt');
+//do_commit($TruthVersion, $db);
 unset($db);
 
 if (file_exists(__DIR__.'/action_after_update.php')) require_once __DIR__.'/action_after_update.php';

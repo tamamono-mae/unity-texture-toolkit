@@ -27,6 +27,7 @@ $resourceToExport = [
   ],
   'storydata'=>[
     [ 'bundleNameMatch'=>'/^a\/storydata_still_\d+.unity3d$/',      'nameMatch'=>'/^still_(\d+)$/i',      'exportTo'=>'card/story/$1', 'extraParamCb'=>function(&$item){return ($item->width!=$item->height)?'-s '.$item->width.'x'.($item->width/16*9):'';} ],
+    //[ 'bundleNameMatch'=>'/^a\/storydata_still_\d+.unity3d$/',      'nameMatch'=>'/^still_(\d+)$/i',      'exportTo'=>'card/story/$1', 'extraParamCb'=>function(&$item){return ($item->width!=$item->height)?'-vf scale='.$item->width.':'.($item->width/16*9):'';} ],
     [ 'bundleNameMatch'=>'/^a\/storydata_\d+.unity3d$/',      'customAssetProcessor'=> 'exportStory' ],
     [ 'bundleNameMatch'=>'/^a\/storydata_spine_full_\d+.unity3d$/',      'customAssetProcessor'=> 'exportStoryStill' ],
     [ 'bundleNameMatch'=>'/^a\/storydata_movie_\d+.unity3d$/',      'customAssetProcessor'=> 'exportSubtitle' ],
@@ -233,7 +234,7 @@ function updateTextureHash($name, Texture2D &$item) {
   $setTextureHashStmt->execute([$name, $item->imageDataHash]);
 }
 
-define('RESOURCE_PATH_PREFIX', '/data/home/web/_redive/');
+define('RESOURCE_PATH_PREFIX', 'web/redive/');
 
 function checkSubResource($manifest, $rules) {
   global $curl;
@@ -255,7 +256,7 @@ function checkSubResource($manifest, $rules) {
       foreach ($assets as $asset) {
         if (substr($asset, -5,5) == '.resS') continue;
         $asset = new AssetFile($asset);
-    
+
         if (isset($rule['customAssetProcessor'])) {
           call_user_func($rule['customAssetProcessor'], $asset, $remoteTime);
         } else
@@ -278,9 +279,9 @@ function checkSubResource($manifest, $rules) {
               $param = '-lossless 1';
               if (isset($rule['extraParam'])) $param .= ' '.$rule['extraParam'];
               if (isset($rule['extraParamCb'])) $param .= ' '.call_user_func($rule['extraParamCb'], $item);
-              $item->exportTo($saveTo, 'webp', $param);
-              if (filemtime($saveTo. '.webp') > $remoteTime)
-              touch($saveTo. '.webp', $remoteTime);
+              $item->exportTo($saveTo, 'png', $param);
+              if (filemtime($saveTo. '.png') > $remoteTime)
+              touch($saveTo. '.png', $remoteTime);
               updateTextureHash("$name:$itemname", $item);
             }
             unset($item);
@@ -347,6 +348,7 @@ function checkSoundResource($manifest, $rules) {
       $nullptr = NULL;
       // https://github.com/esterTion/libcgss/blob/master/src/apps/acb2wavs/acb2wavs.cpp
       exec('acb2wavs '.$acbFileName.' -b 00000000 -a 0030D9E8 -n', $nullptr);
+      //echo "acb2wavs OK\n";
       $acbUnpackDir = '_acb_'.$acbFileName;
       $saveTo = RESOURCE_PATH_PREFIX. preg_replace($rule['bundleNameMatch'], $rule['exportTo'], $name);
       foreach (['internal', 'external'] as $awbFolder)
@@ -354,7 +356,9 @@ function checkSoundResource($manifest, $rules) {
           foreach (glob($acbUnpackDir .'/'. $awbFolder.'/*.wav') as $waveFile) {
             $m4aFile = substr($waveFile, 0, -3).'m4a';
             $finalPath = $saveTo.'/'.pathinfo($m4aFile, PATHINFO_BASENAME);
+            //echo "ffmpeg start\n";
             exec('ffmpeg -hide_banner -loglevel quiet -y -i '.$waveFile.' -vbr 5 -movflags faststart '.$m4aFile, $nullptr);
+            //echo "ffmpeg OK\n";
             checkAndMoveFile($m4aFile, $finalPath, $remoteTime);
             if (filemtime($finalPath) > $remoteTime)
             touch($finalPath, $remoteTime);
@@ -529,7 +533,7 @@ function checkAndUpdateResource($TruthVersion) {
   do {
     $name = "manifest/moviemanifest";
     curl_setopt_array($curl, array(
-      CURLOPT_URL=>'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Movie/SP/High/'.$name,
+      CURLOPT_URL=>'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Movie/PC/High/'.$name,
     ));
     $submanifest = curl_exec($curl);
     $submanifest = parseManifest($submanifest);
@@ -554,4 +558,3 @@ if (defined('TEST_SUITE') && TEST_SUITE == __FILE__) {
   }*/
 }
 //print_r($asset);
-
