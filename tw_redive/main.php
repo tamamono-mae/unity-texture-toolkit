@@ -1,20 +1,26 @@
 <?php
 chdir(__DIR__);
-require_once 'UnityBundle.php';
-require_once 'UnityAsset.php';
-require_once 'diff_parse.php';
+require_once '../UnityBundle.php';
+//define('RESOURCE_PATH_PREFIX', 'data/web/redive/');
+require_once 'resource_fetch.php';
+require_once '../diff_parse.php';
+print("root\n");
+
 if (!file_exists('last_version')) {
-  $last_version = array('TruthVersion'=>-1,'hash'=>'');
+  $last_version = array('TruthVersion'=>0,'hash'=>'');
 } else {
   $last_version = json_decode(file_get_contents('last_version'), true);
 }
 $logFile = fopen('redive.log', 'a');
 function _log($s) {
   global $logFile;
-  //fwrite($logFile, date('[m/d H:i] ').$s."\n");
+  fwrite($logFile, date('[m/d H:i] ').$s."\n");
   echo $s."\n";
 }
+global $last_version;
+var_dump($last_version);
 function execQuery($db, $query) {
+	//print("execQuery\n");
   $returnVal = [];
   /*if ($stmt = $db->prepare($query)) {
     $result = $stmt->execute();
@@ -22,16 +28,23 @@ function execQuery($db, $query) {
       $returnVal = $result->fetchArray(SQLITE3_ASSOC);
     }
   }*/
+  if (!$db) {
+    throw new Exception('Invalid db handle');
+  }
   $result = $db->query($query);
+  if ($result === false) {
+    throw new Exception('Failed executing query: '. $query);
+  }
   $returnVal = $result->fetchAll(PDO::FETCH_ASSOC);
   return $returnVal;
 }
 function autoProxy() {
+	print("autoProxy\n");
   $curl = curl_init();
   curl_setopt_array($curl, [
-    CURLOPT_URL=>'https://www.us-proxy.org/',
+    CURLOPT_URL=>'https://free-proxy-list.net/',
     CURLOPT_HTTPHEADER=>[
-      'Host: www.us-proxy.org',
+      //'Host: www.us-proxy.org',
       'User-Agent: Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:51.0) Gecko/20100101 Firefox/60.0.1',
       'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language: zh-CN,zh-TW;q=0.7,en-US;q=0.3',
@@ -55,12 +68,13 @@ function autoProxy() {
     if ($proxy == $oldproxy) continue;
     curl_setopt($curl, CURLOPT_PROXY, $proxy);
     curl_exec($curl);
+    //_log($proxy.' '.curl_getinfo($curl, CURLINFO_HTTP_CODE));
     if (curl_getinfo($curl, CURLINFO_HTTP_CODE) == 404) {
       /*
       $oldproxy = file_get_contents('currentproxy.txt');
       list($ip, $port) = explode(':', $oldproxy);
       $search  = [' -d '.$ip.' --dport '.$port.' ', ' --to-destination '.$ip.':'.$port];
-      
+
       list($ip, $port) = explode(':', $proxy);
       $replace = [' -d '.$ip.' --dport '.$port.' ', ' --to-destination '.$ip.':'.$port];
       file_put_contents('/etc/firewalld/direct.xml', str_replace($search, $replace, file_get_contents('/etc/firewalld/direct.xml')));
@@ -75,14 +89,17 @@ function autoProxy() {
 }
 
 function encodeValue($value) {
+	//print("encodeValue\n");
   $arr = [];
   foreach ($value as $key=>$val) {
     $arr[] = '/*'.$key.'*/' . (is_numeric($val) ? $val : ('"'.str_replace('"','\\"',$val).'"'));
   }
   return implode(", ", $arr);
 }
-function do_commit($TruthVersion, $db = NULL) {
-  exec('git diff --cached | sed -e "s/@@ -1 +1 @@/@@ -1,1 +1,1 @@/g" >a.diff');
+
+function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
+	print("do_commit\n");
+  //exec('git diff --cached | sed -e "s/@@ -1 +1 @@/@@ -1,1 +1,1 @@/g" >a.diff');
   $versionDiff = parse_db_diff('a.diff', $db, [
     'clan_battle_period.sql' => 'diff_clan_battle', // clan_battle
     'dungeon_area_data.sql' => 'diff_dungeon_area', // dungeon_area
@@ -92,16 +109,18 @@ function do_commit($TruthVersion, $db = NULL) {
     'unit_data.sql' => 'diff_unit',                 // unit
     'experience_team.sql' => 'diff_exp',            // experience
     'unit_promotion.sql' => 'diff_rank',            // rank
-    'hatsune_schedule.sql' => 'diff_event',         // event,
+    'hatsune_schedule.sql' => 'diff_event_hatsune', // event_hatsune,
+    'tower_schedule.sql' => 'diff_event_tower',     // event_tower,
     'campaign_schedule.sql' => 'diff_campaign',     // campaign
   ]);
   unlink('a.diff');
-  $versionDiff['ver'] = $TruthVersion;
+
+  $versionDiff['ver'] = $TruthVersion.$extraMsg;
   $versionDiff['time'] = time();
   $versionDiff['timeStr'] = date('Y-m-d H:i', $versionDiff['time'] + 3600);
 
   $diff_send = [];
-  $commitMessage = [$TruthVersion];
+  $commitMessage = [$TruthVersion.$extraMsg];
   if (isset($versionDiff['new_table'])) {
     $diff_send['new_table'] = $versionDiff['new_table'];
     $commitMessage[] = '- '.count($diff_send['new_table']).' new table: '. implode(', ', $diff_send['new_table']);
@@ -144,22 +163,43 @@ function do_commit($TruthVersion, $db = NULL) {
   exec('git commit -m "'.implode("\n", $commitMessage).'"');
   exec('git rev-parse HEAD', $hash);
   $versionDiff['hash'] = $hash[0];
-  require_once __DIR__.'/../mysql.php';
-  $mysqli->select_db('db_diff');
-  $mysqli->query('REPLACE INTO redive (ver,data) vALUES ('.$TruthVersion.',"'.$mysqli->real_escape_string(brotli_compress(
+  $diff_db = new PDO('sqlite:'.__DIR__.'/../db_diff.db');
+
+  $col = ['ver','data'];
+  $val = [$TruthVersion, brotli_compress(
     json_encode($versionDiff, JSON_UNESCAPED_SLASHES), 11, BROTLI_TEXT
-  )).'")');
+  )];
+  $chkTypes = [
+    'clan_battle',
+    'dungeon_area',
+    'gacha',
+    'quest_area',
+    'story',
+    'unit',
+    'max_lv',
+    'event',
+    'campaign'
+  ];
+  foreach ($chkTypes as $type) {
+    if (isset($versionDiff[$type])) {
+      $col[] = 'has_'.$type;
+      $val[] = 1;
+    }
+  }
+  $stmt = $diff_db->prepare('REPLACE INTO redive ('.implode(',', $col).') VALUES ('.implode(',', array_map(function (){return '?';}, $val)).')');
+  $stmt->execute($val);
   exec('git push origin master');
-  
+
   $data = json_encode(array(
-    'game'=>'redive_tw',
+    'game'=>'redive',
     'hash'=>$hash[0],
-    'ver' =>$TruthVersion,
+    'ver' =>$TruthVersion.$extraMsg,
     'data'=>$diff_send
   ));
+  /*
   $header = [
     'X-GITHUB-EVENT: push_direct_message',
-    'X-HUB-SIGNATURE: sha1='.hash_hmac('sha1', $data, 'sec', false)
+    'X-HUB-SIGNATURE: sha1='.hash_hmac('sha1', $data, file_get_contents(__DIR__.'/../webhook_secret'), false)
   ];
   $curl = curl_init();
   curl_setopt_array($curl, array(
@@ -173,11 +213,13 @@ function do_commit($TruthVersion, $db = NULL) {
   ));
   curl_exec($curl);
   curl_close($curl);
+  */
 }
 
 function main() {
+	print("main\n");
 
-global $last_version;
+
 chdir(__DIR__);
 
 //check app ver at 00:00
@@ -185,7 +227,7 @@ $appver = file_exists('appver') ? file_get_contents('appver') : '1.1.4';
 $itunesid = 1390473317;
 $curl = curl_init();
 curl_setopt_array($curl, array(
-  CURLOPT_URL=>'https://itunes.apple.com/lookup?id='.$itunesid.'&lang=zh_TW&country=tw&rnd='.rand(10000000,99999999),
+  CURLOPT_URL=>'https://itunes.apple.com/lookup?id='.$itunesid.'&lang=ja_jp&country=jp&rnd='.rand(10000000,99999999),
   CURLOPT_HEADER=>0,
   CURLOPT_RETURNTRANSFER=>1,
   CURLOPT_SSL_VERIFYPEER=>false
@@ -201,14 +243,17 @@ if ($appinfo !== false) {
     if (version_compare($prevappver,$appver, '<')) {
       file_put_contents('appver', $appver);
       _log('new game version: '. $appver);
+
       $data = json_encode(array(
-        'game'=>'redive_tw',
+        'game'=>'redive',
         'ver'=>$appver,
-        'link'=>'https://itunes.apple.com/tw/app/id'.$itunesid
+        'link'=>'https://itunes.apple.com/jp/app/id'.$itunesid,
+        'desc'=>$appinfo['results'][0]['releaseNotes']
       ));
+	  /*
       $header = [
         'X-GITHUB-EVENT: app_update',
-        'X-HUB-SIGNATURE: sha1='.hash_hmac('sha1', $data, 'sec', false)
+        'X-HUB-SIGNATURE: sha1='.hash_hmac('sha1', $data, file_get_contents(__DIR__.'/../webhook_secret'), false)
       ];
       $curl = curl_init();
       curl_setopt_array($curl, array(
@@ -222,36 +267,54 @@ if ($appinfo !== false) {
       ));
       curl_exec($curl);
       curl_close($curl);
+		*/
+      // fetch bundle manifest
+      $curl = curl_init();
+      curl_setopt_array($curl, array(
+        CURLOPT_RETURNTRANSFER=>true,
+        CURLOPT_HEADER=>0,
+        CURLOPT_SSL_VERIFYPEER=>false
+      ));
+      curl_setopt($curl, CURLOPT_URL, "https://img-pc.so-net.tw/dl/Bundles/${appver}/Jpn/AssetBundles/iOS/manifest/bdl_assetmanifest");
+      $manifest = curl_exec($curl);
+      file_put_contents('data/+manifest_bundle.txt', $manifest);
+      chdir('data');
+      //exec('git add +manifest_bundle.txt');
+      //exec('git commit -m "bundle manifest v'.$appver.'"');
+      chdir(__DIR__);
     }
   }
 }
 
+$isWin = DIRECTORY_SEPARATOR === '\\';
+$cmdPrepend = $isWin ? '' : 'wine ';
+$cmdAppend = $isWin ? '' : ' >/dev/null 2>&1';
 //check TruthVersion
+/*
 $game_start_header = [
-  'Host: api-pc.so-net.tw',
-  'User-Agent: princessconnect/17 CFNetwork/758.3.15 Darwin/15.4.0',
-  'PARAM: 42cb38693c53d80e450c47e5e2213352eb8cdb35',
+  'Host: app.priconne-redive.jp',
+  'User-Agent: princessconnectredive/39 CFNetwork/758.4.3 Darwin/15.5.0',
+  'PARAM: 527336ff17818cd82e482d5c2cbdea2bc859b316',
   'REGION_CODE: ',
-  'BATTLE_LOGIC_VERSION: 1',
-  'PLATFORM_OS_VERSION: iPhone OS 9.3.1',
+  'BATTLE_LOGIC_VERSION: 2',
+  'PLATFORM_OS_VERSION: iPhone OS 9.3.2',
   'Proxy-Connection: keep-alive',
-  'DEVICE_ID: DAAF343A-ED51-4923-A24A-AD128AA69092',
-  'KEYCHAIN: 692807689',
-  'GRAPHICS_DEVICE_NAME: Apple A7 GPU',
-  'SHORT_UDID: 000974;156A655>551<835?218@261C861C817A776112486341741361616451827355827',
-  'DEVICE_NAME: iPhone6,2',
+  'DEVICE_ID: BFCC3361-7BCE-4706-A44C-DDF8252669BB',
+  'KEYCHAIN: 577247511',
+  'GRAPHICS_DEVICE_NAME: Apple A9 GPU',
+  'SHORT_UDID: 000973A123;453A538?687=244:861<473>161;683111718423523554437738453547512',
+  'DEVICE_NAME: iPhone8,4',
   'BUNDLE_VER: ',
   'LOCALE: Jpn',
-  'IP_ADDRESS: 192.168.0.109',
-  'SID: fbfc84002187655acdce2a88638fd3f4',
-  'Content-Length: 208',
+  'IP_ADDRESS: 192.168.0.110',
+  'SID: bc41c108715c98f0cae62f6f94a990c2',
   'X-Unity-Version: 2017.1.2p2',
   'PLATFORM: 1',
   'Connection: keep-alive',
-  'Accept-Language: zh-cn',
+  'Accept-Language: en-us',
   'APP_VER: '.$appver,
-  'RES_VER: -1',
-  'Accept: */*',
+  'RES_VER: 10002700',
+  'Accept: *\/*',
   'Content-Type: application/x-www-form-urlencoded',
   'Accept-Encoding: gzip, deflate',
   'DEVICE: 1'
@@ -259,17 +322,17 @@ $game_start_header = [
 global $curl;
 $curl = curl_init();
 curl_setopt_array($curl, array(
-  CURLOPT_URL => 'https://api-pc.so-net.tw/check/game_start',
+  CURLOPT_URL => 'https://app.priconne-redive.jp/check/game_start',
   CURLOPT_HTTPHEADER=>$game_start_header,
   CURLOPT_HEADER=>false,
   CURLOPT_RETURNTRANSFER=>true,
   CURLOPT_CONNECTTIMEOUT=>3,
   CURLOPT_SSL_VERIFYPEER=>false,
   CURLOPT_POST=>true,
-  CURLOPT_POSTFIELDS=>base64_decode('E47TtA+1REw1ULHtpALWCxQlSegkFRRBh4+YZ2hAN36nnc93oUUNXXvzL1Szs86/52xmFM2fGuIFiKxjDXaQqP8BSBmQrHPk8BRr5XwhH666Y0PH4XuNJ9jmMwwtHDUQMYGlspljKt/l63KnCb6ObBBRzYdktsiGzvvSBUkvFI/bNxPssxGjfUNFyyFI94CdHgIuMYnjF/k14rynGZt9u3wRzOBn9tlVheq9RdUZmMhOR0l5WkRJMk1tRmhOell5WXpnNVlXTmhOMlEyWkRneA=='),
-//  CURLOPT_PROXY=>file_get_contents('currentproxy.txt'),
-//  CURLOPT_HTTPPROXYTUNNEL=>true,
-//  CURLOPT_PROXY=>'127.0.0.1:23457',
+  CURLOPT_POSTFIELDS=>'wN4AAjnMd5CaTfLGxSL+rUQzafWYMcXIhaUZxKbsOCuR64ldQuDc0mGuXMU72S2nYcOBLpJjWXNeoj59TV2mXcIKl/YXMxtsHHuKKdBCIOujxxJHW79q3jQ3F2LRg8iDTN2EGo+1NLCHqyDD8kt4iYT47D5gJa3HM0d4+n6X/U0/6hB+3utmirBPHRZJ5hVZZaSXbuzefQSbgrQ=',
+  CURLOPT_PROXY=>file_get_contents('currentproxy.txt'),
+  CURLOPT_HTTPPROXYTUNNEL=>true,
+//  CURLOPT_PROXY=>'vultr.biliplus.com:87',
 //  CURLOPT_PROXYTYPE=>CURLPROXY_SOCKS5
 ));
 $response = curl_exec($curl);
@@ -277,44 +340,94 @@ $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 curl_close($curl);
 if ($code == 500 || $code == 0 || ($code == 200 && strlen($response) == 0)) {
   _log('proxy failed: '. $code);
-  /*if (autoProxy()) {
+  if (autoProxy()) {
     return main();
   } else {
     exit;
-  }*/
-  exit;
+  }
 }
 if ($response === false) {
   _log('error fetching TruthVersion');
   return;
 }
-//$response = 'RerDjP3EYxdZtDcDm24Ni5WJLz/mnmKHltcuvXd8wUPHpVgkz7h8eNxSs25yL+xckTnO5EwR/YdCFu/jQ0tspFDhep7GI1hw1zPxX5AIzQnxS1uayolDzl9nfHZtJR28uj043NMdQ9Noqr0TNbbe0MUu66gYUFTzjTvboGf5l7nt/QwXR6hY3tzo67aMTpETbf0ZCi3urhOnEQlJlBMhjU2gtl6Ws2J7+wkTlNswpN2fn+d99xFuIdNln0J0jNRa/Ku/f2ix18wMiKA34ATWXUj5WBHcg6rZjbDrr7xp2QUbU4W3t62nRt7xR0klFxblxD5u4vmTZv5eYXHKlCgbMTM0YWVkYmQ3NzBkOTcyZDZiOTVhZTA0OGE5MjYyZGY2';
 $response = base64_decode($response);
-$key = substr($response, -32, 32);
-$udid = '2eae8edf-16a7-44f5-a593-a026ec46e895';
-$iv = substr(str_replace('-','',$udid),0,16);
-$response = msgpack_unpack(decrypt(substr($response, 0, -32), $key, $iv));
+file_put_contents('resp.data', $response);
+system($cmdPrepend.'Coneshell_call.exe -unpack-edcadba12a674a089107d8065a031742 resp.data resp.json'.$cmdAppend);
+unlink('resp.data');
+if (!file_exists('resp.json')) {
+  _log('Unpack response failed');
+  return;
+}
+$response = json_decode(file_get_contents('resp.json'), true);
+unlink('resp.json');
 
 //print_r($response);
 //exit;
 if (!isset($response['data_headers']['required_res_ver'])) {
+  if (isset($response['data_headers']['result_code']) && $response['data_headers']['result_code'] == 101) {
+    // maintenance, wait for 00:30/30:30
+    $now = time();
+    $until = $now - $now % 1800 + 1830;
+    $wait = $until - $now;
+    if ($wait > 600) {
+      _log("maintaining, exit");
+      return;
+    }
+    _log("maintaining, wait for ${wait} secs now");
+    sleep($wait);
+    return main();
+  }
   _log('invalid response: '. json_encode($response));
   return;
 }
 $TruthVersion = $response['data_headers']['required_res_ver'];
+*/
 
+//if (file_exists('stop_cron')) return;
+
+// guess latest res_ver
+if (!file_exists('last_version')) {
+  $last_version = array('TruthVersion'=>0,'hash'=>'');
+} else {
+  $last_version = json_decode(file_get_contents('last_version'), true);
+}
+global $curl;
+$curl = curl_init();
+curl_setopt_array($curl, array(
+  CURLOPT_RETURNTRANSFER=>true,
+  CURLOPT_HEADER=>0,
+  CURLOPT_SSL_VERIFYPEER=>false
+));
+$TruthVersion = $last_version['TruthVersion'];
+$current_ver = $TruthVersion|0;
+//$current_ver = $TruthVersion|0;
+print("current_ver=".$current_ver."\n");
+for ($i=1; $i<=20; $i++) {
+  $guess = str_pad($current_ver + $i * 1,8,'0',STR_PAD_LEFT);
+  print("guess=".$guess."\n");
+  curl_setopt($curl, CURLOPT_URL, 'https://img-pc.so-net.tw/dl/Resources/'.$guess.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest');
+  curl_exec($curl);
+  $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+  if ($code == 200) {
+    $TruthVersion = $guess.'';
+	print("TruthVersion=".$TruthVersion."\n");
+    break;
+  }
+}
+
+curl_close($curl);
 if ($TruthVersion == $last_version['TruthVersion']) {
   _log('no update found');
   return;
 }
 $last_version['TruthVersion'] = $TruthVersion;
 _log("TruthVersion: ${TruthVersion}");
-file_put_contents('data/!TruthVersion.txt', $TruthVersion."\n");
+file_put_contents('data/TruthVersion.txt', $TruthVersion."\n");
 
 //$TruthVersion = '10000000';
 $curl = curl_init();
 curl_setopt_array($curl, array(
-  CURLOPT_URL=>'http://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
+  CURLOPT_URL=>'https://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
   CURLOPT_RETURNTRANSFER=>true,
   CURLOPT_HEADER=>0,
   CURLOPT_SSL_VERIFYPEER=>false
@@ -327,26 +440,39 @@ file_put_contents('data/+manifest_manifest.txt', $manifest);
 foreach (explode("\n", trim($manifest)) as $line) {
   list($manifestName) = explode(',', $line);
   if ($manifestName == 'manifest/soundmanifest') {
-    curl_setopt($curl, CURLOPT_URL, 'http://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/Sound/manifest/soundmanifest');
-    $manifest = curl_exec($curl);
-    file_put_contents('data/+manifest_sound.txt', $manifest);
+    continue;
   } else {
-    curl_setopt($curl, CURLOPT_URL, 'http://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/'.$manifestName);
+    curl_setopt($curl, CURLOPT_URL, 'https://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/'.$manifestName);
     $manifest = curl_exec($curl);
     file_put_contents('data/+manifest_'.substr($manifestName, 9, -14).'.txt', $manifest);
   }
 }
-curl_setopt($curl, CURLOPT_URL, 'http://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/Movie/SP/High/manifest/moviemanifest');
+curl_setopt($curl, CURLOPT_URL, 'https://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/Sound/manifest/sound2manifest');
+$manifest = curl_exec($curl);
+file_put_contents('data/+manifest_sound.txt', $manifest);
+curl_setopt($curl, CURLOPT_URL, 'https://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/Movie/PC/High/manifest/moviemanifest');
 $manifest = curl_exec($curl);
 file_put_contents('data/+manifest_movie.txt', $manifest);
+curl_setopt($curl, CURLOPT_URL, 'https://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/Movie/PC/Low/manifest/moviemanifest');
+$manifest = curl_exec($curl);
+file_put_contents('data/+manifest_movie_low.txt', $manifest);
 
 $manifest = file_get_contents('data/+manifest_masterdata.txt');
 $manifest = array_map(function ($i){ return explode(',', $i); }, explode("\n", $manifest));
+echo "cdb check\n";
 foreach ($manifest as $entry) {
   if ($entry[0] === 'a/masterdata_master.unity3d') { $manifest = $entry; break; }
 }
+echo "cdb ok\n";
 if ($manifest[0] !== 'a/masterdata_master.unity3d') {
-  throw new Exception('masterdata_master.unity3d not found');
+  _log('masterdata_master.unity3d not found');
+  //file_put_contents('stop_cron', '');
+  file_put_contents('last_version', json_encode($last_version));
+  chdir('data');
+  //exec('git add !TruthVersion.txt +manifest_*.txt');
+  //do_commit($TruthVersion, NULL, ' (no master db)');
+  checkAndUpdateResource($TruthVersion);
+  return;
 }
 $bundleHash = $manifest[1];
 $bundleSize = $manifest[3]|0;
@@ -354,16 +480,16 @@ if ($last_version['hash'] == $bundleHash) {
   _log("Same hash as last version ${bundleHash}");
   file_put_contents('last_version', json_encode($last_version));
   chdir('data');
-  exec('git add !TruthVersion.txt +manifest_*.txt');
-  do_commit($TruthVersion);
+  //exec('git add !TruthVersion.txt +manifest_*.txt');
+  //do_commit($TruthVersion);
   return;
 }
 $last_version['hash'] = $bundleHash;
 //download bundle
-_log("downloading bundle for TruthVersion ${TruthVersion}, hash: ${bundleHash}, size: ${bundleSize}");
+_log("downloading cdb for TruthVersion ${TruthVersion}, hash: ${bundleHash}, size: ${bundleSize}");
 $bundleFileName = "master_${TruthVersion}.unity3d";
 curl_setopt_array($curl, array(
-  CURLOPT_URL=>'http://img-pc.so-net.tw/dl/pool/AssetBundles/'.substr($bundleHash,0,2).'/'.$bundleHash,
+  CURLOPT_URL=>'https://img-pc.so-net.tw/dl/pool/AssetBundles/'.substr($bundleHash,0,2).'/'.$bundleHash,
   CURLOPT_RETURNTRANSFER=>true
 ));
 $bundle = curl_exec($curl);
@@ -374,6 +500,24 @@ if ($downloadedSize != $bundleSize || $downloadedHash != $bundleHash) {
   _log("download failed, received hash: ${downloadedHash}, received size: ${downloadedSize}");
   return;
 }
+
+//extract db
+
+/*
+echo "extract\n";
+_log('dumping cdb');
+file_put_contents('master.cdb', $bundle);
+unset($bundle);
+system($cmdPrepend.'Coneshell_call.exe -cdb master.cdb master.mdb'.$cmdAppend);
+if (!file_exists('master.mdb')) {
+  _log('Dump master.mdb failed');
+  return;
+}
+unlink('master.cdb');
+rename('master.mdb', 'redive.db');
+$dbData = file_get_contents('redive.db');
+//file_put_contents('redive.db.br', brotli_compress($dbData, 9));
+*/
 
 //extract db
 _log('extracting bundle');
@@ -387,7 +531,7 @@ foreach ($asset->preloadTable as &$item) {
     $item = new TextAsset($item, true);
     if($item->name === 'master') {
       file_put_contents('redive.db', $item->data);
-      file_put_contents('redive.db.br', brotli_compress($item->data, 9));
+      //file_put_contents('redive.db.br', brotli_compress($item->data, 9));
       break;
     }
   }
@@ -396,6 +540,7 @@ foreach ($asset->preloadTable as &$item) {
 $asset->__desctruct();
 unset($asset);
 unlink($assetsList[0]);
+
 
 //dump sql
 _log('dumping sql');
@@ -433,13 +578,26 @@ foreach(execQuery($db, 'SELECT story_group_id,title FROM story_data') as $row) {
 foreach(execQuery($db, 'SELECT story_group_id,title FROM event_story_data') as $row) {
   $storyStillName[$row['story_group_id']] = $row['title'];
 }
+foreach(execQuery($db, 'SELECT story_group_id,title FROM tower_story_data') as $row) {
+  $storyStillName[$row['story_group_id']] = $row['title'];
+}
 file_put_contents(RESOURCE_PATH_PREFIX.'card/story/index.json', json_encode($storyStillName, JSON_UNESCAPED_SLASHES));
 $info = [];
 foreach (execQuery($db, 'SELECT unit_id,motion_type,unit_name FROM unit_data WHERE unit_id > 100000 AND unit_id < 200000') as $row) {
   $info[$row['unit_id']] = [
     'name' => $row['unit_name'],
-    'type'=>$row['motion_type']
+    'type'=>$row['motion_type'],
+    'hasRarity6' => false
   ];
+}
+foreach (execQuery($db, 'SELECT unit_id FROM unit_rarity WHERE rarity=6') as $row) {
+  $info[$row['unit_id']]['hasRarity6'] = true;
+}
+$spineManifest = file_get_contents('data/+manifest_spine.txt');
+foreach ($info as $id => &$item) {
+  if (strpos($spineManifest, "a/spine_${id}_chara_base.cysp.unity3d") !== false) {
+    $item['hasSpecialBase'] = true;
+  }
 }
 file_put_contents(RESOURCE_PATH_PREFIX.'spine/classMap.json', json_encode($info));
 
@@ -447,9 +605,11 @@ unset($name);
 file_put_contents('last_version', json_encode($last_version));
 
 chdir('data');
-exec('git add *.sql !TruthVersion.txt +manifest_*.txt');
-do_commit($TruthVersion, $db);
+//exec('git add *.sql !TruthVersion.txt +manifest_*.txt');
+//do_commit($TruthVersion, $db);
 unset($db);
+
+if (file_exists(__DIR__.'/action_after_update.php')) require_once __DIR__.'/action_after_update.php';
 
 checkAndUpdateResource($TruthVersion);
 
