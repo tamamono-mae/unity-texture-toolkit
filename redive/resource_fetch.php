@@ -8,7 +8,9 @@ $resourceToExport = [
     [ 'bundleNameMatch'=>'/^a\/all_battleunitprefab_\d+\.unity3d$/', 'customAssetProcessor'=> 'exportPrefab' ],
   ],
   'bg'=> [
-    [ 'bundleNameMatch'=>'/^a\/bg_still_unit_\d+\.unity3d$/',       'nameMatch'=>'/^still_unit_(\d+)$/i',     'exportTo'=>'card/full/$1' ]
+    [ 'bundleNameMatch'=>'/^a\/bg_still_unit_\d+\.unity3d$/',       'nameMatch'=>'/^still_unit_(\d+)$/i',     'exportTo'=>'card/full/$1' ],
+    [ 'bundleNameMatch'=>'/^a\/bg_bg_\d+\.unity3d$/',             'nameMatch'=>'/^bg_(\d+)$/i',     'exportTo'=>'bg/bg_$1' , 'extraParam'=>'-s 1365x1024' ],
+    [ 'bundleNameMatch'=>'/^a\/bg_bg_\d+_(front|mask)\.unity3d$/','nameMatch'=>'/^bg_(\d+)_(front|mask)$/i',     'exportTo'=>'bg/bg_$1_$2' , 'extraParam'=>'-s 1365x1024' ],
   ],
   'icon'=>[
     [ 'bundleNameMatch'=>'/^a\/icon_icon_skill_\d+\.unity3d$/',     'nameMatch'=>'/^icon_skill_(\d+)$/i',     'exportTo'=>'icon/skill/$1' ],
