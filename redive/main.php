@@ -1,7 +1,6 @@
 <?php
 chdir(__DIR__);
 require_once '../UnityBundle.php';
-//define('RESOURCE_PATH_PREFIX', 'data/web/redive/');
 require_once 'resource_fetch.php';
 require_once 'diff_parse.php';
 print("root\n");
@@ -400,7 +399,6 @@ curl_setopt_array($curl, array(
 ));
 $TruthVersion = $last_version['TruthVersion'];
 $current_ver = $TruthVersion|0;
-//$current_ver = $TruthVersion|0;
 print("current_ver=".$current_ver."\n");
 for ($i=1; $i<=20; $i++) {
   $guess = $current_ver + $i * 10;
@@ -424,7 +422,7 @@ $last_version['TruthVersion'] = $TruthVersion;
 _log("TruthVersion: ${TruthVersion}");
 file_put_contents('data/TruthVersion.txt', $TruthVersion."\n");
 
-//$TruthVersion = '10000000';
+//$TruthVersion = '10010800';
 $curl = curl_init();
 curl_setopt_array($curl, array(
   CURLOPT_URL=>'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
