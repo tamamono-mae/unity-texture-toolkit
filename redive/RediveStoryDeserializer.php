@@ -1,5 +1,5 @@
 <?php
-require_once 'UnityBundle.php';
+require_once '../UnityBundle.php';
 
 class CommandNumber {
   const NONE = -1;
