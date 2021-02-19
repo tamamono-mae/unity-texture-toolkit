@@ -1,7 +1,7 @@
 <?php
 if (count(get_included_files()) == 1) define ('TEST_SUITE', __FILE__);
 
-require_once 'UnityAsset.php';
+require_once '../UnityAsset.php';
 
 $resourceToExport = [
   'all' => [
@@ -9,8 +9,8 @@ $resourceToExport = [
   ],
   'bg'=> [
     [ 'bundleNameMatch'=>'/^a\/bg_still_unit_\d+\.unity3d$/',       'nameMatch'=>'/^still_unit_(\d+)$/i',     'exportTo'=>'card/full/$1' ],
-    [ 'bundleNameMatch'=>'/^a\/bg_bg_\d+\.unity3d$/',             'nameMatch'=>'/^bg_(\d+)$/i',     'exportTo'=>'bg/bg_$1' , 'extraParam'=>'-s 1365x1024' ],
-    [ 'bundleNameMatch'=>'/^a\/bg_bg_\d+_(front|mask)\.unity3d$/','nameMatch'=>'/^bg_(\d+)_(front|mask)$/i',     'exportTo'=>'bg/bg_$1_$2' , 'extraParam'=>'-s 1365x1024' ],
+    [ 'bundleNameMatch'=>'/^a\/bg_bg_\d+\.unity3d$/',             'nameMatch'=>'/^bg_(\d+)$/i',     'exportTo'=>'bg/base/bg_$1' , 'extraParam'=>'-s 1365x1024' ],
+    [ 'bundleNameMatch'=>'/^a\/bg_bg_\d+_(front|mask)\.unity3d$/','nameMatch'=>'/^bg_(\d+)_(front|mask)$/i',     'exportTo'=>'bg/$2/bg_$1_$2' , 'extraParam'=>'-s 1365x1024' ],
   ],
   'icon'=>[
     [ 'bundleNameMatch'=>'/^a\/icon_icon_skill_\d+\.unity3d$/',     'nameMatch'=>'/^icon_skill_(\d+)$/i',     'exportTo'=>'icon/skill/$1' ],
@@ -238,7 +238,7 @@ function updateTextureHash($name, Texture2D &$item) {
   $setTextureHashStmt->execute([$name, $item->imageDataHash]);
 }
 
-define('RESOURCE_PATH_PREFIX', 'web/redive/');
+define('RESOURCE_PATH_PREFIX', '../web/redive/');
 
 function checkSubResource($manifest, $rules) {
   global $curl;
@@ -403,7 +403,7 @@ function checkMovieResource($manifest, $rules) {
       // call UsmDemuxer
       // https://github.com/esterTion/UsmDemuxer
       $nullptr = NULL;
-      exec('mono UsmDemuxer.exe '.$usmFilePath, $nullptr);
+      exec('mono ../UsmDemuxer.exe '.$usmFilePath, $nullptr);
       unlink($usmFilePath);
       $streams = glob(substr($usmFilePath, 0, -4).'_*');
       $videoFile = '';

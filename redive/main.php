@@ -1,6 +1,6 @@
 <?php
 chdir(__DIR__);
-require_once 'UnityBundle.php';
+require_once '../UnityBundle.php';
 //define('RESOURCE_PATH_PREFIX', 'data/web/redive/');
 require_once 'resource_fetch.php';
 require_once 'diff_parse.php';
