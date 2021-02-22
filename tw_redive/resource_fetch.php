@@ -27,14 +27,14 @@ $resourceToExport = [
   ],*/
   'comic'=>[
     [ 'bundleNameMatch'=>'/^a\/comic_comic_l_\d+_\d+.unity3d$/',      'nameMatch'=>'/^comic_l_(\d+_\d+)$/i',      'exportTo'=>'comic/$1', 'extraParam'=>'-s 682x512' ],
-  ],/*
+  ],
   'storydata'=>[
     [ 'bundleNameMatch'=>'/^a\/storydata_still_\d+.unity3d$/',      'nameMatch'=>'/^still_(\d+)$/i',      'exportTo'=>'card/story/$1', 'extraParamCb'=>function(&$item){return ($item->width!=$item->height)?'-s '.$item->width.'x'.($item->width/16*9):'';} ],
     //[ 'bundleNameMatch'=>'/^a\/storydata_still_\d+.unity3d$/',      'nameMatch'=>'/^still_(\d+)$/i',      'exportTo'=>'card/story/$1', 'extraParamCb'=>function(&$item){return ($item->width!=$item->height)?'-vf scale='.$item->width.':'.($item->width/16*9):'';} ],
     [ 'bundleNameMatch'=>'/^a\/storydata_\d+.unity3d$/',      'customAssetProcessor'=> 'exportStory' ],
     [ 'bundleNameMatch'=>'/^a\/storydata_spine_full_\d+.unity3d$/',      'customAssetProcessor'=> 'exportStoryStill' ],
     [ 'bundleNameMatch'=>'/^a\/storydata_movie_\d+.unity3d$/',      'customAssetProcessor'=> 'exportSubtitle' ],
-  ],
+  ],/*
   'spine'=>[
     [ 'bundleNameMatch'=>'/^a\/spine_[01]\d{5}_(chara_base|dear|no_weapon|posing|race|run_jump|smile|common_battle)\.cysp\.unity3d$/', 'customAssetProcessor'=> 'exportSpine' ],
     [ 'bundleNameMatch'=>'/^a\/spine_\d\d_common_battle\.cysp\.unity3d$/', 'customAssetProcessor'=> 'exportSpine' ],
@@ -99,11 +99,13 @@ function exportSubtitle($asset, $remoteTime) {
       if (isset($asset->ClassStructures[$item->type1])) {
         $deserializedStruct = ClassStructHelper::DeserializeStruct($stream, $asset->ClassStructures[$item->type1]['members']);
         $organizedStruct = ClassStructHelper::OrganizeStruct($deserializedStruct);
-        $vttblocks = ['WEBVTT'];
+        $vttblocks = [];
+        $subcount = 1;
         foreach ($organizedStruct['recordList'] as $cue) {
-          $vttblocks[] = vtttime($cue['data']['startTime'])." --> ".vtttime($cue['data']['endTime'])."\n".$cue['data']['text'];
+          $vttblocks[] = $subcount."\n".vtttime($cue['data']['startTime'])." --> ".vtttime($cue['data']['endTime'])."\n".$cue['data']['text'];
+          $subcount++;
         }
-        checkAndCreateFile(RESOURCE_PATH_PREFIX.'movie/vtts/'.substr($organizedStruct['m_Name'], 6).'.vtt', implode("\n\n", $vttblocks), $remoteTime);
+        checkAndCreateFile(RESOURCE_PATH_PREFIX.'movie/srts/'.substr($organizedStruct['m_Name'], 6).'.srt', implode("\n\n", $vttblocks), $remoteTime);
       }
     }
   }
@@ -113,7 +115,8 @@ function vtttime($time) {
   $time -= $h * 3600;
   $m = str_pad(floor($time / 60), 2, '0', STR_PAD_LEFT);
   $time -= $m * 60;
-  $s = str_pad(number_format($time, 3), 6, '0', STR_PAD_LEFT);
+  //$s = str_pad(number_format($time, 3), 6, '0', STR_PAD_LEFT);
+  $s = str_replace("." , "," , str_pad(number_format($time, 3), 6, '0', STR_PAD_LEFT));
   return implode(':', [$h, $m, $s]);
 }
 
@@ -233,7 +236,7 @@ function textureHasUpdated($name, Texture2D &$item) {
   return !(!empty($row) && $row['hash'] == $hash);
 }
 $setTextureHashStmt = $cacheHashDb->prepare('REPLACE INTO textureHash (res,hash,version) VALUES (?,?,?)');
-function updateTextureHash($name, Texture2D &$item) {
+function updateTextureHash($name, Texture2D &$item, $version) {
   global $setTextureHashStmt;
   $setTextureHashStmt->execute([$name, $item->imageDataHash, $version]);
 }
@@ -300,7 +303,7 @@ function checkSubResource($manifest, $rules, $version) {
       }
       unset($bundleData);
       if (isset($rule['print'])) exit;
-      setHashCached($name, $info['hash']);
+      setHashCached($name, $info['hash'], $version);
     }
   }
 }
@@ -424,7 +427,7 @@ function checkMovieResource($manifest, $rules, $version) {
       }
       if (empty($videoFile)) {
         _log('---no video stream found');
-        setHashCached($name, $info['hash']);
+        setHashCached($name, $info['hash'], $version);
         continue;
       }
       $saveTo = RESOURCE_PATH_PREFIX. preg_replace($rule['bundleNameMatch'], $rule['exportTo'], $name);
@@ -530,7 +533,7 @@ function checkAndUpdateResource($TruthVersion) {
     ));
     $submanifest = curl_exec($curl);
     $submanifest = parseManifest($submanifest);
-    checkSoundResource($submanifest, $resourceToExport['sound']);
+    //checkSoundResource($submanifest, $resourceToExport['sound'], $TruthVersion);
   } while(0);
 
   // movie res check
@@ -541,7 +544,7 @@ function checkAndUpdateResource($TruthVersion) {
     ));
     $submanifest = curl_exec($curl);
     $submanifest = parseManifest($submanifest);
-    checkMovieResource($submanifest, $resourceToExport['movie']);
+    //checkMovieResource($submanifest, $resourceToExport['movie'], $TruthVersion);
   } while(0);
 }
 if (defined('TEST_SUITE') && TEST_SUITE == __FILE__) {
