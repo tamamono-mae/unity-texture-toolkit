@@ -420,7 +420,7 @@ $last_version['TruthVersion'] = $TruthVersion;
 _log("TruthVersion: ${TruthVersion}");
 file_put_contents('data/TruthVersion.txt', $TruthVersion."\n");
 
-//$TruthVersion = '10000000';
+//$TruthVersion = '00000000';
 $curl = curl_init();
 curl_setopt_array($curl, array(
   CURLOPT_URL=>'https://img-pc.so-net.tw/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
