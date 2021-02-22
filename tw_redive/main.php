@@ -410,6 +410,20 @@ for ($i=1; $i<=20; $i++) {
     break;
   }
 }
+if ($TruthVersion == $last_version['TruthVersion']) {
+  for ($i=1; $i<=20; $i++) {
+    $guess = str_pad(round($current_ver,3,PHP_ROUND_HALF_DOWN) + 999 + $i * 1,8,'0',STR_PAD_LEFT);
+    print("guess=".$guess."\n");
+    curl_setopt($curl, CURLOPT_URL, 'https://img-pc.so-net.tw/dl/Resources/'.$guess.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest');
+    curl_exec($curl);
+    $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    if ($code == 200) {
+      $TruthVersion = $guess.'';
+  	print("TruthVersion=".$TruthVersion."\n");
+      break;
+    }
+  }
+}
 
 curl_close($curl);
 if ($TruthVersion == $last_version['TruthVersion']) {
