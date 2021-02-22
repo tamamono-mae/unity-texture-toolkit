@@ -17,7 +17,7 @@ function _log($s) {
   echo $s."\n";
 }
 global $last_version;
-var_dump($last_version);
+//var_dump($last_version);
 function execQuery($db, $query) {
 	//print("execQuery\n");
   $returnVal = [];
@@ -98,7 +98,7 @@ function encodeValue($value) {
 
 function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
 	print("do_commit\n");
-  //exec('git diff --cached | sed -e "s/@@ -1 +1 @@/@@ -1,1 +1,1 @@/g" >a.diff');
+  exec('git diff --cached | sed -e "s/@@ -1 +1 @@/@@ -1,1 +1,1 @@/g" >a.diff');
   $versionDiff = parse_db_diff('a.diff', $db, [
     'clan_battle_period.sql' => 'diff_clan_battle', // clan_battle
     'dungeon_area_data.sql' => 'diff_dungeon_area', // dungeon_area
@@ -158,12 +158,10 @@ function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
     $commitMessage[] = '- max rank to '.$versionDiff['max_rank'];
   }
   $diff_send['diff'] = $versionDiff['diff'];
-
   exec('git commit -m "'.implode("\n", $commitMessage).'"');
   exec('git rev-parse HEAD', $hash);
   $versionDiff['hash'] = $hash[0];
   $diff_db = new PDO('sqlite:'.__DIR__.'/../db_diff.db');
-
   $col = ['ver','data'];
   $val = [$TruthVersion, brotli_compress(
     json_encode($versionDiff, JSON_UNESCAPED_SLASHES), 11, BROTLI_TEXT
@@ -187,6 +185,7 @@ function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
   }
   $stmt = $diff_db->prepare('REPLACE INTO redive ('.implode(',', $col).') VALUES ('.implode(',', array_map(function (){return '?';}, $val)).')');
   $stmt->execute($val);
+  print("push\n");
   exec('git push origin master');
 
   $data = json_encode(array(
@@ -278,8 +277,8 @@ if ($appinfo !== false) {
       $manifest = curl_exec($curl);
       file_put_contents('data/+manifest_bundle.txt', $manifest);
       chdir('data');
-      //exec('git add +manifest_bundle.txt');
-      //exec('git commit -m "bundle manifest v'.$appver.'"');
+      exec('git add +manifest_bundle.txt');
+      exec('git commit -m "bundle manifest v'.$appver.'"');
       chdir(__DIR__);
     }
   }
@@ -467,8 +466,8 @@ if ($manifest[0] !== 'a/masterdata_master_0003.cdb') {
   //file_put_contents('stop_cron', '');
   file_put_contents('last_version', json_encode($last_version));
   chdir('data');
-  //exec('git add !TruthVersion.txt +manifest_*.txt');
-  //do_commit($TruthVersion, NULL, ' (no master db)');
+  exec('git add TruthVersion.txt +manifest_*.txt');
+  do_commit($TruthVersion, NULL, ' (no master db)');
   checkAndUpdateResource($TruthVersion);
   return;
 }
@@ -478,8 +477,8 @@ if ($last_version['hash'] == $bundleHash) {
   _log("Same hash as last version ${bundleHash}");
   file_put_contents('last_version', json_encode($last_version));
   chdir('data');
-  //exec('git add !TruthVersion.txt +manifest_*.txt');
-  //do_commit($TruthVersion);
+  exec('git add TruthVersion.txt +manifest_*.txt');
+  do_commit($TruthVersion);
   return;
 }
 $last_version['hash'] = $bundleHash;
@@ -577,8 +576,8 @@ unset($name);
 file_put_contents('last_version', json_encode($last_version));
 
 chdir('data');
-//exec('git add *.sql !TruthVersion.txt +manifest_*.txt');
-//do_commit($TruthVersion, $db);
+exec('git add *.sql TruthVersion.txt +manifest_*.txt');
+do_commit($TruthVersion, $db);
 unset($db);
 
 if (file_exists(__DIR__.'/action_after_update.php')) require_once __DIR__.'/action_after_update.php';
