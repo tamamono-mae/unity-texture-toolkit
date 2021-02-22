@@ -508,7 +508,6 @@ function checkAndUpdateResource($TruthVersion) {
         continue;
       }
       $submanifest = parseManifest($submanifest);
-
       checkSubResource($submanifest, $rules, $TruthVersion);
       setHashCached($name, $manifest[$name]['hash'],$TruthVersion);
     }

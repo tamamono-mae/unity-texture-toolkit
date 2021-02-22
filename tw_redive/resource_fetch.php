@@ -9,6 +9,8 @@ $resourceToExport = [
   ],/*
   'bg'=> [
     [ 'bundleNameMatch'=>'/^a\/bg_still_unit_\d+\.unity3d$/',       'nameMatch'=>'/^still_unit_(\d+)$/i',     'exportTo'=>'card/full/$1' ]
+    [ 'bundleNameMatch'=>'/^a\/bg_bg_\d+\.unity3d$/',             'nameMatch'=>'/^bg_(\d+)$/i',     'exportTo'=>'bg/base/bg_$1' , 'extraParam'=>'-s 1365x1024' ],
+    [ 'bundleNameMatch'=>'/^a\/bg_bg_\d+_(front|mask)\.unity3d$/','nameMatch'=>'/^bg_(\d+)_(front|mask)$/i',     'exportTo'=>'bg/$2/bg_$1_$2' , 'extraParam'=>'-s 1365x1024' ],
   ],*/
   'icon'=>[
     //[ 'bundleNameMatch'=>'/^a\/icon_icon_skill_\d+\.unity3d$/',     'nameMatch'=>'/^icon_skill_(\d+)$/i',     'exportTo'=>'icon/skill/$1' ],
@@ -25,8 +27,7 @@ $resourceToExport = [
   ],*/
   'comic'=>[
     [ 'bundleNameMatch'=>'/^a\/comic_comic_l_\d+_\d+.unity3d$/',      'nameMatch'=>'/^comic_l_(\d+_\d+)$/i',      'exportTo'=>'comic/$1', 'extraParam'=>'-s 682x512' ],
-  ],
-  /*
+  ],/*
   'storydata'=>[
     [ 'bundleNameMatch'=>'/^a\/storydata_still_\d+.unity3d$/',      'nameMatch'=>'/^still_(\d+)$/i',      'exportTo'=>'card/story/$1', 'extraParamCb'=>function(&$item){return ($item->width!=$item->height)?'-s '.$item->width.'x'.($item->width/16*9):'';} ],
     //[ 'bundleNameMatch'=>'/^a\/storydata_still_\d+.unity3d$/',      'nameMatch'=>'/^still_(\d+)$/i',      'exportTo'=>'card/story/$1', 'extraParamCb'=>function(&$item){return ($item->width!=$item->height)?'-vf scale='.$item->width.':'.($item->width/16*9):'';} ],
@@ -201,17 +202,17 @@ function parseManifest($manifest) {
   return $list;
 }
 $cacheHashDb = new PDO('sqlite:'.__DIR__.'/cacheHash.db');
-$chkHashStmt = $cacheHashDb->prepare('SELECT hash FROM cacheHash WHERE res=?');
+$chkHashStmt = $cacheHashDb->prepare('SELECT hash FROM cacheHash WHERE res=? ORDER BY version DESC');
 function shouldUpdate($name, $hash) {
   global $chkHashStmt;
   $chkHashStmt->execute([$name]);
   $row = $chkHashStmt->fetch();
   return !(!empty($row) && $row['hash'] == $hash);
 }
-$setHashStmt = $cacheHashDb->prepare('REPLACE INTO cacheHash (res,hash) VALUES (?,?)');
-function setHashCached($name, $hash) {
+$setHashStmt = $cacheHashDb->prepare('REPLACE INTO cacheHash (res,hash,version) VALUES (?,?,?)');
+function setHashCached($name, $hash, $version) {
   global $setHashStmt;
-  $setHashStmt->execute([$name, $hash]);
+  $setHashStmt->execute([$name, $hash, $version]);
 }
 
 function findRule($name, $rules) {
@@ -222,7 +223,7 @@ function findRule($name, $rules) {
   return false;
 }
 
-$chkTextureHashStmt = $cacheHashDb->prepare('SELECT hash FROM textureHash WHERE res=?');
+$chkTextureHashStmt = $cacheHashDb->prepare('SELECT hash FROM textureHash WHERE res=? ORDER BY version DESC');
 function textureHasUpdated($name, Texture2D &$item) {
   global $chkTextureHashStmt;
   $hash = crc32($item->imageData);
@@ -231,15 +232,15 @@ function textureHasUpdated($name, Texture2D &$item) {
   $row = $chkTextureHashStmt->fetch();
   return !(!empty($row) && $row['hash'] == $hash);
 }
-$setTextureHashStmt = $cacheHashDb->prepare('REPLACE INTO textureHash (res,hash) VALUES (?,?)');
+$setTextureHashStmt = $cacheHashDb->prepare('REPLACE INTO textureHash (res,hash,version) VALUES (?,?,?)');
 function updateTextureHash($name, Texture2D &$item) {
   global $setTextureHashStmt;
-  $setTextureHashStmt->execute([$name, $item->imageDataHash]);
+  $setTextureHashStmt->execute([$name, $item->imageDataHash, $version]);
 }
 
 define('RESOURCE_PATH_PREFIX', '../web/redive_tw/');
 
-function checkSubResource($manifest, $rules) {
+function checkSubResource($manifest, $rules, $version) {
   global $curl;
   foreach ($manifest as $name => $info) {
     if (($rule = findRule($name, $rules)) !== false && shouldUpdate($name, $info['hash'])) {
@@ -249,7 +250,7 @@ function checkSubResource($manifest, $rules) {
       ));
       $bundleData = curl_exec($curl);
       $remoteTime = curl_getinfo($curl, CURLINFO_FILETIME);
-      $remoteTime = time();
+      //$remoteTime = time();
       if (md5($bundleData) != $info['hash']) {
         _log('download failed  '.$name);
         continue;
@@ -285,7 +286,7 @@ function checkSubResource($manifest, $rules) {
               $item->exportTo($saveTo, 'png', $param);
               if (filemtime($saveTo. '.png') > $remoteTime)
               touch($saveTo. '.png', $remoteTime);
-              updateTextureHash("$name:$itemname", $item);
+              updateTextureHash("$name:$itemname", $item, $version);
             }
             unset($item);
           }
@@ -304,7 +305,7 @@ function checkSubResource($manifest, $rules) {
   }
 }
 
-function checkSoundResource($manifest, $rules) {
+function checkSoundResource($manifest, $rules, $version) {
   global $curl;
   foreach ($manifest as $name => &$info) {
     $info['hasAwb'] = false;
@@ -371,11 +372,11 @@ function checkSoundResource($manifest, $rules) {
       unlink($acbFileName);
       $info['hasAwb'] && unlink($awbFileName);
       if (isset($rule['print'])) exit;
-      setHashCached($name, $info['hash']);
+      setHashCached($name, $info['hash'], $version);
     }
   }
 }
-function checkMovieResource($manifest, $rules) {
+function checkMovieResource($manifest, $rules, $version) {
   global $curl;
   $curl_movie = curl_copy_handle($curl);
   mkdir('usm_temp', 0777, true);
@@ -466,7 +467,7 @@ function checkMovieResource($manifest, $rules) {
       unlink($videoFile);
       array_map('unlink', $audioFiles);
       if (isset($rule['print'])) exit;
-      setHashCached($name, $info['hash']);
+      setHashCached($name, $info['hash'], $version);
     }
   }
   delTree('usm_temp');
@@ -507,8 +508,8 @@ function checkAndUpdateResource($TruthVersion) {
         continue;
       }
       $submanifest = parseManifest($submanifest);
-      checkSubResource($submanifest, $rules);
-      setHashCached($name, $manifest[$name]['hash']);
+      checkSubResource($submanifest, $rules, $TruthVersion);
+      setHashCached($name, $manifest[$name]['hash'],$TruthVersion);
     }
   }
 
