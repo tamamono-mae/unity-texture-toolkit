@@ -202,17 +202,17 @@ function parseManifest($manifest) {
   return $list;
 }
 $cacheHashDb = new PDO('sqlite:'.__DIR__.'/cacheHash.db');
-$chkHashStmt = $cacheHashDb->prepare('SELECT hash FROM cacheHash WHERE res=?');
+$chkHashStmt = $cacheHashDb->prepare('SELECT hash FROM cacheHash WHERE res=? ORDER BY version DESC');
 function shouldUpdate($name, $hash) {
   global $chkHashStmt;
   $chkHashStmt->execute([$name]);
   $row = $chkHashStmt->fetch();
   return !(!empty($row) && $row['hash'] == $hash);
 }
-$setHashStmt = $cacheHashDb->prepare('REPLACE INTO cacheHash (res,hash) VALUES (?,?)');
-function setHashCached($name, $hash) {
+$setHashStmt = $cacheHashDb->prepare('REPLACE INTO cacheHash (res,hash,version) VALUES (?,?,?)');
+function setHashCached($name, $hash, $version) {
   global $setHashStmt;
-  $setHashStmt->execute([$name, $hash]);
+  $setHashStmt->execute([$name, $hash, $version]);
 }
 
 function findRule($name, $rules) {
@@ -223,7 +223,7 @@ function findRule($name, $rules) {
   return false;
 }
 
-$chkTextureHashStmt = $cacheHashDb->prepare('SELECT hash FROM textureHash WHERE res=?');
+$chkTextureHashStmt = $cacheHashDb->prepare('SELECT hash FROM textureHash WHERE res=? ORDER BY version DESC');
 function textureHasUpdated($name, Texture2D &$item) {
   global $chkTextureHashStmt;
   $hash = crc32($item->imageData);
@@ -232,15 +232,15 @@ function textureHasUpdated($name, Texture2D &$item) {
   $row = $chkTextureHashStmt->fetch();
   return !(!empty($row) && $row['hash'] == $hash);
 }
-$setTextureHashStmt = $cacheHashDb->prepare('REPLACE INTO textureHash (res,hash) VALUES (?,?)');
-function updateTextureHash($name, Texture2D &$item) {
+$setTextureHashStmt = $cacheHashDb->prepare('REPLACE INTO textureHash (res,hash,version) VALUES (?,?,?)');
+function updateTextureHash($name, Texture2D &$item, $version) {
   global $setTextureHashStmt;
-  $setTextureHashStmt->execute([$name, $item->imageDataHash]);
+  $setTextureHashStmt->execute([$name, $item->imageDataHash, $version]);
 }
 
 define('RESOURCE_PATH_PREFIX', '../web/redive/');
 
-function checkSubResource($manifest, $rules) {
+function checkSubResource($manifest, $rules, $version) {
   global $curl;
   foreach ($manifest as $name => $info) {
     if (($rule = findRule($name, $rules)) !== false && shouldUpdate($name, $info['hash'])) {
@@ -250,7 +250,7 @@ function checkSubResource($manifest, $rules) {
       ));
       $bundleData = curl_exec($curl);
       $remoteTime = curl_getinfo($curl, CURLINFO_FILETIME);
-      $remoteTime = time();
+      //$remoteTime = time();
       if (md5($bundleData) != $info['hash']) {
         _log('download failed  '.$name);
         continue;
@@ -285,8 +285,8 @@ function checkSubResource($manifest, $rules) {
               if (isset($rule['extraParamCb'])) $param .= ' '.call_user_func($rule['extraParamCb'], $item);
               $item->exportTo($saveTo, 'png', $param);
               if (filemtime($saveTo. '.png') > $remoteTime)
-              touch($saveTo. '.png', $remoteTime);
-              updateTextureHash("$name:$itemname", $item);
+				touch($saveTo. '.png', $remoteTime);
+              updateTextureHash("$name:$itemname", $item, $version);
             }
             unset($item);
           }
@@ -300,12 +300,12 @@ function checkSubResource($manifest, $rules) {
       }
       unset($bundleData);
       if (isset($rule['print'])) exit;
-      setHashCached($name, $info['hash']);
+      setHashCached($name, $info['hash'], $version);
     }
   }
 }
 
-function checkSoundResource($manifest, $rules) {
+function checkSoundResource($manifest, $rules, $version) {
   global $curl;
   foreach ($manifest as $name => &$info) {
     $info['hasAwb'] = false;
@@ -323,7 +323,7 @@ function checkSoundResource($manifest, $rules) {
       ));
       $acbData = curl_exec($curl);
       $remoteTime = curl_getinfo($curl, CURLINFO_FILETIME);
-      $remoteTime = time();
+      //$remoteTime = time();
       if (md5($acbData) != $info['hash']) {
         _log('download failed  '.$name);
         continue;
@@ -365,18 +365,18 @@ function checkSoundResource($manifest, $rules) {
             //echo "ffmpeg OK\n";
             checkAndMoveFile($m4aFile, $finalPath, $remoteTime);
             if (filemtime($finalPath) > $remoteTime)
-            touch($finalPath, $remoteTime);
+				touch($finalPath, $remoteTime);
           }
         }
       delTree($acbUnpackDir);
       unlink($acbFileName);
       $info['hasAwb'] && unlink($awbFileName);
       if (isset($rule['print'])) exit;
-      setHashCached($name, $info['hash']);
+      setHashCached($name, $info['hash'], $version);
     }
   }
 }
-function checkMovieResource($manifest, $rules) {
+function checkMovieResource($manifest, $rules, $version) {
   global $curl;
   $curl_movie = curl_copy_handle($curl);
   mkdir('usm_temp', 0777, true);
@@ -424,7 +424,7 @@ function checkMovieResource($manifest, $rules) {
       }
       if (empty($videoFile)) {
         _log('---no video stream found');
-        setHashCached($name, $info['hash']);
+        setHashCached($name, $info['hash'], $version);
         continue;
       }
       $saveTo = RESOURCE_PATH_PREFIX. preg_replace($rule['bundleNameMatch'], $rule['exportTo'], $name);
@@ -467,7 +467,7 @@ function checkMovieResource($manifest, $rules) {
       unlink($videoFile);
       array_map('unlink', $audioFiles);
       if (isset($rule['print'])) exit;
-      setHashCached($name, $info['hash']);
+      setHashCached($name, $info['hash'], $version);
     }
   }
   delTree('usm_temp');
@@ -508,8 +508,9 @@ function checkAndUpdateResource($TruthVersion) {
         continue;
       }
       $submanifest = parseManifest($submanifest);
-      checkSubResource($submanifest, $rules);
-      setHashCached($name, $manifest[$name]['hash']);
+
+      checkSubResource($submanifest, $rules, $TruthVersion);
+      setHashCached($name, $manifest[$name]['hash'],$TruthVersion);
     }
   }
 
@@ -530,7 +531,7 @@ function checkAndUpdateResource($TruthVersion) {
     ));
     $submanifest = curl_exec($curl);
     $submanifest = parseManifest($submanifest);
-    checkSoundResource($submanifest, $resourceToExport['sound']);
+    checkSoundResource($submanifest, $resourceToExport['sound'], $TruthVersion);
   } while(0);
 
   // movie res check
@@ -541,7 +542,7 @@ function checkAndUpdateResource($TruthVersion) {
     ));
     $submanifest = curl_exec($curl);
     $submanifest = parseManifest($submanifest);
-    checkMovieResource($submanifest, $resourceToExport['movie']);
+    checkMovieResource($submanifest, $resourceToExport['movie'], $TruthVersion);
   } while(0);
 }
 if (defined('TEST_SUITE') && TEST_SUITE == __FILE__) {
