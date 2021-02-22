@@ -17,7 +17,6 @@ function _log($s) {
   echo $s."\n";
 }
 global $last_version;
-//var_dump($last_version);
 function execQuery($db, $query) {
 	//print("execQuery\n");
   $returnVal = [];
