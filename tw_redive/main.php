@@ -411,8 +411,8 @@ for ($i=1; $i<=20; $i++) {
   }
 }
 if ($TruthVersion == $last_version['TruthVersion']) {
-  for ($i=1; $i<=20; $i++) {
-    $guess = str_pad(round($current_ver,3,PHP_ROUND_HALF_DOWN) + 999 + $i * 1,8,'0',STR_PAD_LEFT);
+  for ($i=0; $i<=20; $i++) {
+    $guess = str_pad(round($current_ver,-3,PHP_ROUND_HALF_DOWN) + 1000 + $i * 1,8,'0',STR_PAD_LEFT);
     print("guess=".$guess."\n");
     curl_setopt($curl, CURLOPT_URL, 'https://img-pc.so-net.tw/dl/Resources/'.$guess.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest');
     curl_exec($curl);
