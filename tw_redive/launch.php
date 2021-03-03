@@ -57,7 +57,7 @@ function main() {
     exec('php main.php 2>&1 | tee shell-logs/$(date +"%FT-%H-%M-%S").txt');
 
   }
-
+}
 while(1){
   if(time()/60%10 == 0) main();
   sleep(30);
