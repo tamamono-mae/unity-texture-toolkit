@@ -18,23 +18,23 @@ curl_setopt_array($curl, array(
 ));
 $TruthVersion = $last_version['TruthVersion'];
 $current_ver = $TruthVersion|0;
-print("current_ver=".$current_ver."\n");
+print(date('[Y/m/d H:i] ')."Current_ver=".$current_ver." searching...\n");
 for ($i=1; $i<=20; $i++) {
   $guess = $current_ver + $i * 10;
-  print("guess=".$guess."\n");
+  //print("guess=".$guess."\n");
   curl_setopt($curl, CURLOPT_URL, 'http://prd-priconne-redive.akamaized.net/dl/Resources/'.$guess.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest');
   curl_exec($curl);
   $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
   if ($code == 200) {
     $TruthVersion = $guess.'';
-  print("TruthVersion=".$TruthVersion."\n");
+    print(date('[Y/m/d H:i] ')."TruthVersion=".$TruthVersion."\n");
     break;
   }
 }
 
 curl_close($curl);
 if ($TruthVersion == $last_version['TruthVersion']) {
-  print("no update found\n");
+  print(date('[Y/m/d H:i] ')."no update found\n");
   //return;
 }
 else{

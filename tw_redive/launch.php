@@ -18,16 +18,16 @@ function main() {
   ));
   $TruthVersion = $last_version['TruthVersion'];
   $current_ver = $TruthVersion|0;
-  print("current_ver=".$current_ver."\n");
+  print(date('[Y/m/d H:i] ')."Current ver=".$current_ver." searching...\n");
   for ($i=1; $i<=500; $i++) {
     $guess = str_pad($current_ver + $i * 1,8,'0',STR_PAD_LEFT);
-    print("guess=".$guess."\n");
+    //print("guess=".$guess."\n");
     curl_setopt($curl, CURLOPT_URL, 'https://img-pc.so-net.tw/dl/Resources/'.$guess.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest');
     curl_exec($curl);
     $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
     if ($code == 200) {
       $TruthVersion = $guess.'';
-  	print("TruthVersion=".$TruthVersion."\n");
+  	print(date('[Y/m/d H:i] ')."TruthVersion=".$TruthVersion."\n");
       break;
     }
   }
@@ -40,7 +40,7 @@ function main() {
       $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
       if ($code == 200) {
         $TruthVersion = $guess.'';
-    	print("TruthVersion=".$TruthVersion."\n");
+    	print(date('[Y/m/d H:i] ')."TruthVersion=".$TruthVersion."\n");
         break;
       }
     }
@@ -48,7 +48,7 @@ function main() {
 
   curl_close($curl);
   if ($TruthVersion == $last_version['TruthVersion']) {
-    print("no update found\n");
+    print(date('[Y/m/d H:i] ')."no update found\n");
     //return;
   }
   else{
