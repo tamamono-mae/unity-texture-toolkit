@@ -18,7 +18,7 @@ function main() {
   ));
   $TruthVersion = $last_version['TruthVersion'];
   $current_ver = $TruthVersion|0;
-  print(date('[Y/m/d H:i] ')."Current ver=".$current_ver." searching...\n");
+  print(date('[Y/m/d H:i] ')."Current ver=".str_pad($current_ver,8,'0',STR_PAD_LEFT)." searching...\n");
   for ($i=1; $i<=500; $i++) {
     $guess = str_pad($current_ver + $i * 1,8,'0',STR_PAD_LEFT);
     //print("guess=".$guess."\n");
@@ -53,7 +53,7 @@ function main() {
   }
   else{
     print("update found\n");
-    chdir('tw_redive');
+    //chdir('tw_redive');
     exec('php main.php 2>&1 | tee shell-logs/$(date +"%FT-%H-%M-%S").txt');
 
   }
