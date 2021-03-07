@@ -356,7 +356,7 @@ exec("mv ${TruthVersion}_redive.db.7z mdb/${TruthVersion}_redive.7z");
 //--->file_put_contents('last_version', json_encode($last_version));
 
 //checkAndUpdateResource($TruthVersion);
-checkAndUpdateManifest($TruthVersion);
+checkAndUpdateManifest($TruthVersion,$appver);
 
 }
 

@@ -23,29 +23,34 @@ function parseRcloneMD5($shellMsg) {
   }
   return $list;
 }
+function mkpath($dirpath){
+  if(!is_dir($dirpath))
+    exec("mkdir -p ${dirpath}");
+}
+
 $cacheHashDb = new PDO('sqlite:'.__DIR__.'/cacheHash.db');
-$chkHashStmt = $cacheHashDb->prepare('SELECT hash FROM cacheHash WHERE res=? AND version=? ORDER BY version DESC');
-function shouldUpdate($name, $hash, $version) {
+$chkHashStmt = $cacheHashDb->prepare('SELECT hash FROM cacheHash WHERE res=? AND version=? AND os=? ORDER BY version DESC');
+function shouldUpdate($name, $hash, $version, $OS) {
   global $chkHashStmt;
-  $chkHashStmt->execute([$name,$version]);
+  $chkHashStmt->execute([$name,$version,$OS]);
   $row = $chkHashStmt->fetch();
   return !(!empty($row) && $row['hash'] == $hash);
 }
-$setHashStmt = $cacheHashDb->prepare('REPLACE INTO cacheHash (res,hash,version) VALUES (?,?,?)');
-function setHashCached($name, $hash, $version) {
+$setHashStmt = $cacheHashDb->prepare('REPLACE INTO cacheHash (res,hash,version,os) VALUES (?,?,?,?)');
+function setHashCached($name, $hash, $version, $OS) {
   global $setHashStmt;
-  $setHashStmt->execute([$name, $hash, $version]);
+  $setHashStmt->execute([$name, $hash, $version, $OS]);
 }
 
-define('RESOURCE_PATH_PREFIX', 'gs:pcr-raw/');
-define('SOURCE_PATH_PREFIX', 'prd:');
+define('RESOURCE_PATH_PREFIX', 'storage/');
+define('SOURCE_PATH_PREFIX', "https://prd-priconne-redive.akamaized.net/");
 
-function checkAndUpdateResource($TruthVersion) {
+function checkAndUpdateResource($TruthVersion,$appver) {
   global $resourceToExport;
   global $curl;
   chdir(__DIR__);
   curl_setopt_array($curl, array(
-    CURLOPT_URL=>'https://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
+    CURLOPT_URL=>SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
     CURLOPT_CONNECTTIMEOUT=>5,
     CURLOPT_ENCODING=>'gzip',
     CURLOPT_RETURNTRANSFER=>true,
@@ -58,96 +63,96 @@ function checkAndUpdateResource($TruthVersion) {
   $manifest = parseManifest($manifest);
 }
 
-function checkAndUpdateManifest($TruthVersion){
+function checkAndUpdateManifest($TruthVersion,$appver){
   $curl = curl_init();
 
   curl_setopt_array($curl, array(
-    CURLOPT_URL=>'https://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
+    CURLOPT_URL=> SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
     CURLOPT_RETURNTRANSFER=>true,
     CURLOPT_HEADER=>0,
     CURLOPT_SSL_VERIFYPEER=>false
   ));
-  exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest",$dstHashList);
-  list($dstHash) = explode('  ', $dstHashList[0]);
-  if(shouldUpdate('manifest/manifest_assetmanifest', $dstHash, $TruthVersion)){
-    exec("rclone copy ".SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/manifest/",$copyMsg);
-    exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest",$dstHashList);
-    list($dstHash) = explode('  ', $dstHashList[0]);
-    if(strlen($copyMsg[0]) == 0){
-      echo "Copied manifest/manifest_assetmanifest, hash: ${dstHash}\n";
-      setHashCached("manifest/manifest_assetmanifest", $dstHash, $TruthVersion);
-    }else{
-      echo "Copy fail, name: manifest/manifest_assetmanifest\n${shellMsg}\n";
-    }
-  }
-  unset($dstHashList);
-  // fetch all manifest & save
-  $manifest = curl_exec($curl);
 
-  //file_put_contents('data/+manifest_manifest.txt', $manifest);
-  exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/manifest",$dstHashList);
-  $hashList = parseRcloneMD5($dstHashList);
-  //echo $hashList["consttext_assetmanifest"];
-  foreach (explode("\n", trim($manifest)) as $line) {
-    list($manifestName,$srcHash) = explode(',', $line);
-    if(shouldUpdate($manifestName, $hashList[substr($manifestName, 9)], $TruthVersion)){
-      exec("rclone copy ".SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/".$manifestName." ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/manifest/",$copyMsg);
-      exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/".$manifestName,$dstHashList);
-      list($dstHash) = explode('  ', $dstHashList[0]);
-      if((strlen($copyMsg[0]) == 0) && ($dstHash == $srcHash)){
-        echo "Copied ${manifestName}, hash: ${dstHash}\n";
-      }else{
-        echo "Copy fail, name: ${manifestName} hash: $srcHash\n";
-        continue;
+  foreach(array("iOS","Android","Windows") as $OS){
+    curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/manifest/manifest_assetmanifest');
+    //echo SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/manifest/manifest_assetmanifest'."\n";
+    $manifest = curl_exec($curl);
+    if(shouldUpdate('manifest/manifest_assetmanifest', md5($manifest), $TruthVersion, $OS)){
+      $savePath = RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/".$OS."/manifest/manifest_assetmanifest";
+      mkpath(dirname($savePath));
+      file_put_contents($savePath, $manifest);
+      touch($savePath, time());
+      //^^^ Because we cannot get filetime from server!
+      echo "Copied: manifest/manifest_assetmanifest, hash: ".md5($manifest)."\n";
+      setHashCached("manifest/manifest_assetmanifest", md5($manifest), $TruthVersion, $OS);
+    }
+
+    $savePath = RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/".$OS."/";
+    mkpath($savePath."manifest");
+    foreach (explode("\n", trim($manifest)) as $line) {
+      list($manifestName,$srcHash) = explode(',', $line);
+      if(shouldUpdate($manifestName, $srcHash, $TruthVersion, $OS) || md5_file($savePath.$manifestName) != $srcHash){
+        curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/'.$manifestName);
+        //echo SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/'.$manifestName."\n";
+        $manifest = curl_exec($curl);
+        file_put_contents($savePath.$manifestName, $manifest);
+        touch($savePath.$manifestName, time());
+        if(md5_file($savePath.$manifestName) == $srcHash){
+          echo "Copied: ${manifestName}, hash: ${srcHash}\n";
+        }else{
+          echo "Fail: ${manifestName}, hash: ${srcHash}\n";
+          continue;
+        }
+        setHashCached($manifestName, $srcHash, $TruthVersion, $OS);
       }
-
-      setHashCached($manifestName, $srcHash, $TruthVersion);
     }
-    unset($dstHashList);
+
+    curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Bundles/${appver}/Jpn/AssetBundles/".$OS."/manifest/bdl_assetmanifest");
+    $manifest = curl_exec($curl);
+    if(shouldUpdate('manifest/bdl_assetmanifest', md5($manifest), $appver, $OS)){
+      $savePath = RESOURCE_PATH_PREFIX."dl/Bundles/${appver}/Jpn/AssetBundles/".$OS."/manifest/bdl_assetmanifest";
+      mkpath(dirname($savePath));
+      file_put_contents($savePath, $manifest);
+      touch($savePath, time());
+      echo "Copied: manifest/bdl_assetmanifest, hash: ".md5($manifest)."\n";
+      setHashCached("manifest/bdl_assetmanifest", md5($manifest), $appver, $OS);
+    }
+
+    unset($manifest,$line);
   }
 
-  exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Sound/manifest/sound2manifest",$dstHashList);
-  list($dstHash) = explode('  ', $dstHashList[0]);
-  if(shouldUpdate('manifest/sound2manifest', $dstHash, $TruthVersion)){
-    exec("rclone copy ".SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Sound/manifest/sound2manifest ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Sound/manifest/",$copyMsg);
-    exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Sound/manifest/sound2manifest",$dstHashList);
-    list($dstHash) = explode('  ', $dstHashList[0]);
-    if(strlen($copyMsg[0]) == 0){
-      echo "Copied manifest/sound2manifest, hash: ${dstHash}\n";
-      setHashCached("manifest/sound2manifest", $dstHash, $TruthVersion);
-    }else{
-      echo "Copy fail, name: manifest/sound2manifest\n${shellMsg}\n";
-    }
+  unset($OS);
+  $OS = "general";
+  curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Sound/manifest/sound2manifest");
+  $manifest = curl_exec($curl);
+  if(shouldUpdate('manifest/sound2manifest', md5($manifest), $TruthVersion, $OS)){
+    $savePath = RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Sound/manifest/sound2manifest";
+    mkpath(dirname($savePath));
+    file_put_contents($savePath, $manifest);
+    touch($savePath, time());
+    echo "Copied: manifest/sound2manifest, hash: ".md5($manifest)."\n";
+    setHashCached("manifest/sound2manifest", md5($manifest), $TruthVersion, $OS);
   }
-  unset($dstHashList);
 
-  exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/High/manifest/moviemanifest",$dstHashList);
-  list($dstHash) = explode('  ', $dstHashList[0]);
-  if(shouldUpdate('High/manifest/moviemanifest', $dstHash, $TruthVersion)){
-    exec("rclone copy ".SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/High/manifest/moviemanifest ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/High/manifest/",$copyMsg);
-    exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/High/manifest/moviemanifest",$dstHashList);
-    list($dstHash) = explode('  ', $dstHashList[0]);
-    if(strlen($copyMsg[0]) == 0){
-      echo "Copied High/manifest/moviemanifest, hash: ${dstHash}\n";
-      setHashCached("High/manifest/moviemanifest", $dstHash, $TruthVersion);
-    }else{
-      echo "Copy fail, name: High/manifest/moviemanifest\n${shellMsg}\n";
-    }
+  curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/High/manifest/moviemanifest");
+  $manifest = curl_exec($curl);
+  if(shouldUpdate('High/manifest/moviemanifest', md5($manifest), $TruthVersion, $OS)){
+    $savePath = RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/High/manifest/moviemanifest";
+    mkpath(dirname($savePath));
+    file_put_contents($savePath, $manifest);
+    touch($savePath, time());
+    echo "Copied: High/manifest/moviemanifest, hash: ".md5($manifest)."\n";
+    setHashCached("High/manifest/moviemanifest", md5($manifest), $TruthVersion, $OS);
   }
-  unset($dstHashList);
-  exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/Low/manifest/moviemanifest",$dstHashList);
-  list($dstHash) = explode('  ', $dstHashList[0]);
-  if(shouldUpdate('Low/manifest/moviemanifest', $dstHash, $TruthVersion)){
-    exec("rclone copy ".SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/Low/manifest/moviemanifest ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/Low/manifest/",$copyMsg);
-    exec("rclone md5sum ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/Low/manifest/moviemanifest",$dstHashList);
-    list($dstHash) = explode('  ', $dstHashList[0]);
-    if(strlen($copyMsg[0]) == 0){
-      echo "Copied Low/manifest/moviemanifest, hash: ${dstHash}\n";
-      setHashCached("Low/manifest/moviemanifest", $dstHash, $TruthVersion);
-    }else{
-      echo "Copy fail, name: Low/manifest/moviemanifest\n${shellMsg}\n";
-    }
-  }
-  unset($dstHashList);
 
+  curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/Low/manifest/moviemanifest");
+  $manifest = curl_exec($curl);
+  if(shouldUpdate('Low/manifest/moviemanifest', md5($manifest), $TruthVersion, $OS)){
+    $savePath = RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/Low/manifest/moviemanifest";
+    mkpath(dirname($savePath));
+    file_put_contents($savePath, $manifest);
+    touch($savePath, time());
+    echo "Copied: Low/manifest/moviemanifest, hash: ".md5($manifest)."\n";
+    setHashCached("Low/manifest/moviemanifest", md5($manifest), $TruthVersion, $OS);
+  }
 }
