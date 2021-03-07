@@ -224,7 +224,7 @@ $appver = file_exists('appver') ? file_get_contents('appver') : '1.1.4';
 $itunesid = 1390473317;
 $curl = curl_init();
 curl_setopt_array($curl, array(
-  CURLOPT_URL=>'https://itunes.apple.com/lookup?id='.$itunesid.'&lang=ja_jp&country=jp&rnd='.rand(10000000,99999999),
+  CURLOPT_URL=>'https://itunes.apple.com/lookup?id='.$itunesid.'&lang=zh_tw&country=tw&rnd='.rand(10000000,99999999),
   CURLOPT_HEADER=>0,
   CURLOPT_RETURNTRANSFER=>1,
   CURLOPT_SSL_VERIFYPEER=>false
