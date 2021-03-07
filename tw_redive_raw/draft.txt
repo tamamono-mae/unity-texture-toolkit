@@ -1,0 +1,27 @@
+https://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest
+  https://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/.$manifestName
+    https://prd-priconne-redive.akamaized.net/dl/pool/AssetBundles/'.substr($bundleHash,0,2).'/'.$bundleHash
+
+https://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Sound/manifest/sound2manifest
+  https://prd-priconne-redive.akamaized.net/dl/pool/Sound/'.substr($info['hash'],0,2).'/'.$info['hash']
+
+https://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/Movie/PC/High/manifest/moviemanifest
+  https://prd-priconne-redive.akamaized.net/dl/pool/Movie/'.substr($info['hash'],0,2).'/'.$info['hash']
+
+https://prd-priconne-redive.akamaized.net/dl/Bundles/${appver}/Jpn/AssetBundles/iOS/manifest/bdl_assetmanifest
+  https://prd-priconne-redive.akamaized.net/dl/pool/AssetBundles/'.substr($bundleHash,0,2).'/'.$bundleHash
+
+
+foreach manifest_assetmanifest
+  shouldUpdate?
+    curl https://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/.$manifestName
+    rclone copy https://prd-priconne-redive.akamaized.net/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/.$manifestName gs:pcr-raw/dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/.$manifestName
+    foreach $bundleHash
+      shouldUpdate?
+        rclone copy https://prd-priconne-redive.akamaized.net/dl/pool/AssetBundles/'.substr($bundleHash,0,2).'/'.$bundleHash gs:pcr-raw/dl/pool/AssetBundles/'.substr($bundleHash,0,2).'/'.$bundleHash
+        exec('rclone md5sum gs:pcr-raw/dl/pool/AssetBundles/'.substr($bundleHash,0,2).'/'.$bundleHash', $fileMD5)
+        if $fileMD5 != $bundleHash
+          echo download $manifestName fail: $bundleHash
+          continue;
+        setHashCached
+    setHashCached
