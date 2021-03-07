@@ -351,12 +351,10 @@ rename('master.mdb', "${TruthVersion}_redive.db");
 $dbData = file_get_contents("${TruthVersion}_redive.db");
 exec("p7zip ${TruthVersion}_redive.db");
 exec("mv ${TruthVersion}_redive.db.7z mdb/${TruthVersion}_redive.7z");
-//file_put_contents('redive.db.br', brotli_compress($dbData, 9));
 
-//--->file_put_contents('last_version', json_encode($last_version));
-
-//checkAndUpdateResource($TruthVersion);
 checkAndUpdateManifest($TruthVersion,$appver);
+checkAndUpdateResource($TruthVersion,$appver);
+file_put_contents('last_version', json_encode($last_version));
 
 }
 

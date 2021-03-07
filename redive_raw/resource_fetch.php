@@ -45,10 +45,40 @@ function setHashCached($name, $hash, $version, $OS) {
 define('RESOURCE_PATH_PREFIX', 'storage/');
 define('SOURCE_PATH_PREFIX', "https://prd-priconne-redive.akamaized.net/");
 
+function checkSubResource($manifest, $appendsrc, $appenddst , $version, $OS) {
+  global $curl;
+  foreach ($manifest as $name => $info) {
+    if (shouldUpdate($name, $info['hash'], $version, $OS)) {
+
+      curl_setopt_array($curl, array(
+        CURLOPT_URL=>SOURCE_PATH_PREFIX.$appendsrc.substr($info['hash'],0,2).'/'.$info['hash'],
+      ));
+      $bundleData = curl_exec($curl);
+      $remoteTime = curl_getinfo($curl, CURLINFO_FILETIME);
+      $remoteTime = time();
+      if (md5($bundleData) != $info['hash']) {
+        _log('download failed  '.$name);
+        continue;
+      }
+      $savePath = RESOURCE_PATH_PREFIX.$appenddst.substr($info['hash'],0,2).'/'.$info['hash'];
+      mkpath(dirname($savePath));
+      file_put_contents($savePath, $bundleData);
+      touch($savePath, $remoteTime);
+      //^^^ Because we cannot get filetime from server!
+      echo "Copied: ".$name.", hash: ".$info['hash']."\n";
+      unset($bundleData);
+      setHashCached($name, $info['hash'], $version, $OS);
+    }
+  }
+}
+
+
 function checkAndUpdateResource($TruthVersion,$appver) {
   global $resourceToExport;
   global $curl;
   chdir(__DIR__);
+
+  $curl = curl_init();
   curl_setopt_array($curl, array(
     CURLOPT_URL=>SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest',
     CURLOPT_CONNECTTIMEOUT=>5,
@@ -58,9 +88,52 @@ function checkAndUpdateResource($TruthVersion,$appver) {
     CURLOPT_FILETIME=>true,
     CURLOPT_SSL_VERIFYPEER=>false
   ));
+
+  foreach(array("iOS","Android","Windows") as $OS){
+    curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/manifest/manifest_assetmanifest');
+    $manifest = curl_exec($curl);
+    foreach (explode("\n", trim($manifest)) as $line) {
+      list($manifestName,$srcHash) = explode(',', $line);
+      curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/'.$manifestName);
+      $submanifest = curl_exec($curl);
+      if (md5($submanifest) != $srcHash) {
+        _log('download failed  '.$name);
+        continue;
+      }
+      $submanifest = parseManifest($submanifest);
+      checkSubResource($submanifest, 'dl/pool/AssetBundles/', 'dl/pool/AssetBundles/', $TruthVersion, $OS);
+
+    }
+    unset($submanifest);
+
+    curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Bundles/${appver}/Jpn/AssetBundles/".$OS."/manifest/bdl_assetmanifest");
+    $manifest = curl_exec($curl);
+    $manifest = parseManifest($manifest);
+    checkSubResource($manifest, 'dl/pool/AssetBundles/', 'dl/pool/AssetBundles/', ${appver}, $OS);
+    unset($manifest,$line);
+
+  }
+  unset($OS);
+
+  $OS = "general";
+  curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Sound/manifest/sound2manifest");
   $manifest = curl_exec($curl);
-  exec("rclone copy ".SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/manifest/manifest_assetmanifest ".RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/iOS/manifest/");
   $manifest = parseManifest($manifest);
+  checkSubResource($manifest, 'dl/pool/Sound/', 'dl/pool/Sound/', $TruthVersion, $OS);
+  unset($manifest);
+
+  curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/High/manifest/moviemanifest");
+  $manifest = curl_exec($curl);
+  $manifest = parseManifest($manifest);
+  checkSubResource($manifest, 'dl/pool/Movie/', 'dl/pool/Movie/', $TruthVersion, $OS);
+  unset($manifest);
+
+  curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/Low/manifest/moviemanifest");
+  $manifest = curl_exec($curl);
+  $manifest = parseManifest($manifest);
+  checkSubResource($manifest, 'dl/pool/Movie/', 'dl/pool/Movie/', $TruthVersion, $OS);
+  unset($manifest);
+
 }
 
 function checkAndUpdateManifest($TruthVersion,$appver){
@@ -93,7 +166,6 @@ function checkAndUpdateManifest($TruthVersion,$appver){
       list($manifestName,$srcHash) = explode(',', $line);
       if(shouldUpdate($manifestName, $srcHash, $TruthVersion, $OS) || md5_file($savePath.$manifestName) != $srcHash){
         curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/'.$manifestName);
-        //echo SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/'.$manifestName."\n";
         $manifest = curl_exec($curl);
         file_put_contents($savePath.$manifestName, $manifest);
         touch($savePath.$manifestName, time());
