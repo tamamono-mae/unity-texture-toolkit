@@ -68,7 +68,7 @@ if ($appinfo !== false) {
   $appinfo = json_decode($appinfo, true);
   if (!empty($appinfo['results'][0]['version'])) {
     $prevappver = $appver;
-    $appver = $appinfo['results'][0]['version'];
+    $appver = substr($appinfo['results'][0]['version'],0,5);
 
     if (version_compare($prevappver,$appver, '<')) {
       file_put_contents('appver', $appver);
@@ -373,7 +373,7 @@ rename('redive.db', "${TruthVersion}_redive.db");
 $dbData = file_get_contents("${TruthVersion}_redive.db");
 exec("p7zip ${TruthVersion}_redive.db");
 exec("mv ${TruthVersion}_redive.db.7z mdb/${TruthVersion}_redive.7z");
-
+list($appver) = explode('_', $appver);
 checkAndUpdateManifest($TruthVersion,$appver);
 checkAndUpdateResource($TruthVersion,$appver);
 file_put_contents('last_version', json_encode($last_version));

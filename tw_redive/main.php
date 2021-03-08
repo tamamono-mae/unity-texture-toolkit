@@ -235,7 +235,7 @@ if ($appinfo !== false) {
   $appinfo = json_decode($appinfo, true);
   if (!empty($appinfo['results'][0]['version'])) {
     $prevappver = $appver;
-    $appver = $appinfo['results'][0]['version'];
+    $appver = substr($appinfo['results'][0]['version'],0,5);
 
     if (version_compare($prevappver,$appver, '<')) {
       file_put_contents('appver', $appver);
