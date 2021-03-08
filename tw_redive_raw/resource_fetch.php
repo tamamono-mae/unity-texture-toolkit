@@ -77,7 +77,7 @@ function checkSubResource($manifest, $appendsrc, $appenddst , $version, $OS) {
       file_put_contents($savePath, $bundleData);
       touch($savePath, $remoteTime);
       //^^^ Because we cannot get filetime from server!
-      echo "Copied: ".$name.", hash: ".$info['hash']."\n";
+      _log("Copied: ".$name.", hash: ".$info['hash']);
       unset($bundleData);
       setHashCached($name, $info['hash'], $version, $OS);
     }
@@ -100,7 +100,7 @@ function checkAndUpdateResource($TruthVersion,$appver) {
     CURLOPT_FILETIME=>true,
     CURLOPT_SSL_VERIFYPEER=>false
   ));
-
+  
   foreach(array("iOS","Android","Windows") as $OS){
     curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/manifest/manifest_assetmanifest');
     $manifest = curl_exec($curl);
@@ -129,23 +129,23 @@ function checkAndUpdateResource($TruthVersion,$appver) {
   }
   unset($OS);
 
-  $OS = "";
+  $OS = "Sound";
   curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Sound/manifest/sound2manifest");
   $manifest = curl_exec($curl);
   $manifest = parseManifest($manifest);
   checkSubResource($manifest, 'dl/pool/Sound/', 'dl/pool/Sound/', $TruthVersion, $OS);
   unset($manifest);
-
+  $OS = "Movie";
   curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/High/manifest/moviemanifest");
   $manifest = curl_exec($curl);
   $manifest = parseManifest($manifest);
   checkSubResource($manifest, 'dl/pool/Movie/', 'dl/pool/Movie/', $TruthVersion, $OS);
   unset($manifest);
-
+  $OS = "MovieLite";
   curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/Movie/PC/Low/manifest/moviemanifest");
   $manifest = curl_exec($curl);
   $manifest = parseManifest($manifest);
-  checkSubResource($manifest, 'dl/pool/Movie/', 'dl/pool/Movie/', $TruthVersion, $OS);
+  checkSubResource($manifest, 'dl/pool/Movie/', 'dl/pool/Movie_lite/', $TruthVersion, $OS);
   unset($manifest);
 
 
@@ -163,7 +163,6 @@ function checkAndUpdateManifest($TruthVersion,$appver){
 
   foreach(array("iOS","Android","Windows") as $OS){
     curl_setopt($curl, CURLOPT_URL, SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/manifest/manifest_assetmanifest');
-    //echo SOURCE_PATH_PREFIX.'dl/Resources/'.$TruthVersion.'/Jpn/AssetBundles/'.$OS.'/manifest/manifest_assetmanifest'."\n";
     $manifest = curl_exec($curl);
     if(shouldUpdateManifest('manifest/manifest_assetmanifest', md5($manifest), $TruthVersion, $OS)){
       $savePath = RESOURCE_PATH_PREFIX."dl/Resources/".$TruthVersion."/Jpn/AssetBundles/".$OS."/manifest/manifest_assetmanifest";
@@ -171,7 +170,7 @@ function checkAndUpdateManifest($TruthVersion,$appver){
       file_put_contents($savePath, $manifest);
       touch($savePath, time());
       //^^^ Because we cannot get filetime from server!
-      echo "Copied: manifest/manifest_assetmanifest, hash: ".md5($manifest)."\n";
+      _log("Copied: manifest/manifest_assetmanifest, hash: ".md5($manifest));
       setHashCachedManifest("manifest/manifest_assetmanifest", md5($manifest), $TruthVersion, $OS);
     }
 
@@ -185,9 +184,9 @@ function checkAndUpdateManifest($TruthVersion,$appver){
         file_put_contents($savePath.$manifestName, $manifest);
         touch($savePath.$manifestName, time());
         if(md5_file($savePath.$manifestName) == $srcHash){
-          echo "Copied: ${manifestName}, hash: ${srcHash}\n";
+          _log("Copied: ${manifestName}, hash: ${srcHash}");
         }else{
-          echo "Fail: ${manifestName}, hash: ${srcHash}\n";
+          _log("Fail: ${manifestName}, hash: ${srcHash}");
           continue;
         }
         setHashCachedManifest($manifestName, $srcHash, $TruthVersion, $OS);
@@ -201,7 +200,7 @@ function checkAndUpdateManifest($TruthVersion,$appver){
       mkpath(dirname($savePath));
       file_put_contents($savePath, $manifest);
       touch($savePath, time());
-      echo "Copied: manifest/bdl_assetmanifest, hash: ".md5($manifest)."\n";
+      _log("Copied: manifest/bdl_assetmanifest, hash: ".md5($manifest));
       setHashCachedManifest("manifest/bdl_assetmanifest", md5($manifest), $appver, $OS);
     }
 
@@ -217,7 +216,7 @@ function checkAndUpdateManifest($TruthVersion,$appver){
     mkpath(dirname($savePath));
     file_put_contents($savePath, $manifest);
     touch($savePath, time());
-    echo "Copied: manifest/sound2manifest, hash: ".md5($manifest)."\n";
+    _log("Copied: manifest/sound2manifest, hash: ".md5($manifest));
     setHashCachedManifest("manifest/sound2manifest", md5($manifest), $TruthVersion, $OS);
   }
 
@@ -228,7 +227,7 @@ function checkAndUpdateManifest($TruthVersion,$appver){
     mkpath(dirname($savePath));
     file_put_contents($savePath, $manifest);
     touch($savePath, time());
-    echo "Copied: High/manifest/moviemanifest, hash: ".md5($manifest)."\n";
+    _log("Copied: High/manifest/moviemanifest, hash: ".md5($manifest));
     setHashCachedManifest("High/manifest/moviemanifest", md5($manifest), $TruthVersion, $OS);
   }
 
@@ -239,7 +238,7 @@ function checkAndUpdateManifest($TruthVersion,$appver){
     mkpath(dirname($savePath));
     file_put_contents($savePath, $manifest);
     touch($savePath, time());
-    echo "Copied: Low/manifest/moviemanifest, hash: ".md5($manifest)."\n";
+    _log("Copied: Low/manifest/moviemanifest, hash: ".md5($manifest));
     setHashCachedManifest("Low/manifest/moviemanifest", md5($manifest), $TruthVersion, $OS);
   }
 }
