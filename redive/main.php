@@ -134,7 +134,7 @@ function discordWebhook($versionDiff) {
     $postMessage .= $f.'主角等級上限開放：LV '.$versionDiff['max_lv']['lv'];
   }
   if (isset($versionDiff['max_rank'])) {
-    $postMessage .= $f.'角色RANK上限開放：'.$versionDiff['max_rank'];
+    $postMessage .= $f.'角色RANK上限開放：RANK '.$versionDiff['max_rank'];
   }
 
   $webhookDB = new PDO('sqlite:'.__DIR__.'/wh.db');
