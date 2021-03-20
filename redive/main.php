@@ -95,6 +95,75 @@ function encodeValue($value) {
   return implode(", ", $arr);
 }
 
+function discordWebhook($versionDiff) {
+  $f = "\n:white_medium_square: "; $s = "\n　 ． ";
+  $diff_send = [];
+  $postMessage = ":white_medium_square: 資料庫版本：".$versionDiff['ver'];
+  if (isset($versionDiff['new_table'])) {
+    $postMessage .= $f.count($versionDiff['new_table']).' 個新資料表：'.$s. implode($s, $versionDiff['new_table']);
+  }
+  if (isset($versionDiff['unit'])) {
+    $diff_send['card'] = array_map(function ($a){ return str_repeat('★', $a['rarity']).$a['name'];}, $versionDiff['unit']);
+    $postMessage .= $f.'新增角色：'.$s. implode($s, $diff_send['card']);
+  }
+  if (isset($versionDiff['event'])) {
+    $diff_send['event'] = array_map(function ($a){ return $a['name'];}, $versionDiff['event']);
+    if(strlen(implode($s,$diff_send['event'])) > 0) $postMessage .= $f.'新增活動：'.$s. implode($s,$diff_send['event']);
+    else $postMessage .= $f.'活動更新';
+  }
+  if (isset($versionDiff['gacha'])) {
+    $diff_send['gacha'] = array_map(function ($a){ return $a['detail'];}, $versionDiff['gacha']);
+    $postMessage .= $f.'新增轉蛋：'.$s. str_replace('\n',$s,implode($s,$diff_send['gacha']));
+  }
+  if (isset($versionDiff['quest_area'])) {
+    $diff_send['quest_area'] = array_map(function ($a){ return $a['name'];}, $versionDiff['quest_area']);
+    $postMessage .= $f.'新增冒險：'.$s. implode($s,$diff_send['quest_area']);
+  }
+  if (isset($versionDiff['clan_battle'])) {
+    $postMessage .= $f.'戰隊競賽';
+  }
+  if (isset($versionDiff['dungeon_area'])) {
+    $diff_send['dungeon_area'] = array_map(function ($a){ return $a['name'];}, $versionDiff['dungeon_area']);
+    $postMessage .= $f.'新增地下城冒險：'.$s. implode($s,$diff_send['dungeon_area']);
+  }
+  if (isset($versionDiff['story_data'])) {
+    $diff_send['story_data'] = array_map(function ($a){ return $a['name'];}, $versionDiff['story_data']);
+    $postMessage .= $f.'新增劇情：'.$s. implode($s,$diff_send['story_data']);
+  }
+  if (isset($versionDiff['max_lv'])) {
+    $postMessage .= $f.'主角等級上限開放：LV '.$versionDiff['max_lv']['lv'];
+  }
+  if (isset($versionDiff['max_rank'])) {
+    $postMessage .= $f.'角色RANK上限開放：'.$versionDiff['max_rank'];
+  }
+
+  $webhookDB = new PDO('sqlite:'.__DIR__.'/wh.db');
+  $table = execQuery($webhookDB, "SELECT * FROM webhooks");
+  $post = json_decode(file_get_contents('discordSample.json'), true);
+  $post["embeds"][0]["description"] = $postMessage;
+
+  foreach ($table as $entry){
+    $curl = curl_init();
+    curl_setopt_array($curl, array(
+      CURLOPT_URL => $entry["url"],
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_ENCODING => '',
+      CURLOPT_MAXREDIRS => 10,
+      CURLOPT_TIMEOUT => 0,
+      CURLOPT_FOLLOWLOCATION => true,
+      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+      CURLOPT_CUSTOMREQUEST => 'POST',
+      CURLOPT_POSTFIELDS =>json_encode($post),
+      CURLOPT_HTTPHEADER => array(
+        'Content-Type: application/json',
+      ),
+    ));
+    curl_exec($curl);
+    curl_close($curl);
+  }
+  unset($webhookDB);
+}
+
 function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
 	print("do_commit\n");
   exec('git diff --cached | sed -e "s/@@ -1 +1 @@/@@ -1,1 +1,1 @@/g" >a.diff');
@@ -187,6 +256,9 @@ function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
   print("push\n");
   exec('git push origin master');
 
+  chdir(__DIR__);
+  discordWebhook($versionDiff);
+  chdir("data");
   $data = json_encode(array(
     'game'=>'redive',
     'hash'=>$hash[0],
