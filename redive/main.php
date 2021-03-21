@@ -99,9 +99,6 @@ function discordWebhook($versionDiff) {
   $f = "\n:white_medium_square: "; $s = "\n　 ． ";
   $diff_send = [];
   $postMessage = ":white_medium_square: 資料庫版本：".$versionDiff['ver'];
-  if (isset($versionDiff['new_table'])) {
-    $postMessage .= $f.count($versionDiff['new_table']).' 個新資料表：'.$s. implode($s, $versionDiff['new_table']);
-  }
   if (isset($versionDiff['unit'])) {
     $diff_send['card'] = array_map(function ($a){ return str_repeat('★', $a['rarity']).$a['name'];}, $versionDiff['unit']);
     $postMessage .= $f.'新增角色：'.$s. implode($s, $diff_send['card']);
@@ -113,7 +110,7 @@ function discordWebhook($versionDiff) {
   }
   if (isset($versionDiff['gacha'])) {
     $diff_send['gacha'] = array_map(function ($a){ return $a['detail'];}, $versionDiff['gacha']);
-    $postMessage .= $f.'新增轉蛋：'.$s. str_replace('\n',$s,implode($s,$diff_send['gacha']));
+    $postMessage .= $f.'新增轉蛋：'.$s. str_replace('\n',"　",implode($s,$diff_send['gacha']));
   }
   if (isset($versionDiff['quest_area'])) {
     $diff_send['quest_area'] = array_map(function ($a){ return $a['name'];}, $versionDiff['quest_area']);
@@ -135,6 +132,9 @@ function discordWebhook($versionDiff) {
   }
   if (isset($versionDiff['max_rank'])) {
     $postMessage .= $f.'角色RANK上限開放：RANK '.$versionDiff['max_rank'];
+  }
+  if (isset($versionDiff['new_table'])) {
+    $postMessage .= $f.count($versionDiff['new_table']).' 個新資料表：'.$s. implode($s, $versionDiff['new_table']);
   }
 
   $webhookDB = new PDO('sqlite:'.__DIR__.'/wh.db');
