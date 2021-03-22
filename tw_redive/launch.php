@@ -1,9 +1,11 @@
 <?php
 chdir(__DIR__);
 print("root\n");
+$syncPaths = json_decode(file_get_contents('../syncPaths.json'), true);
 
 function main() {
   //Check new tw_redive (TW) version
+  global $syncPaths;
   if (!file_exists('last_version')) {
     $last_version = array('TruthVersion'=>0,'hash'=>'');
   } else {
@@ -53,9 +55,8 @@ function main() {
   }
   else{
     print("update found\n");
-    //chdir('tw_redive');
     exec('php main.php 2>&1 | tee shell-logs/$(date +"%FT-%H-%M-%S").txt');
-
+    exec('rclone copy '.$syncPaths['twLocal'].' '.$syncPaths['twRemote'].' -P --log-file=shell-logs/rc_$(date +"%FT-%H-%M-%S").txt');
   }
 }
 while(1){

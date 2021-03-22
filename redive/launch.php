@@ -5,6 +5,7 @@ $syncPaths = json_decode(file_get_contents('../syncPaths.json'), true);
 
 function main() {
 //Check new redive (JP) version
+global $syncPaths;
 if (!file_exists('last_version')) {
   $last_version = array('TruthVersion'=>0,'hash'=>'');
 } else {
