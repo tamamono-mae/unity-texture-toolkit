@@ -1,6 +1,7 @@
 <?php
 chdir(__DIR__);
 print("root\n");
+$syncPaths = json_decode(file_get_contents('../syncPaths.json'), true);
 
 function main() {
 //Check new redive (JP) version
@@ -39,9 +40,8 @@ if ($TruthVersion == $last_version['TruthVersion']) {
 }
 else{
   print("update found\n");
-  //chdir('redive');
   exec('php main.php 2>&1 | tee shell-logs/$(date +"%FT-%H-%M-%S").txt');
-  //chdir(__DIR__);
+  exec('rclone copy '.$syncPaths['jpLocal'].' '.$syncPaths['jpRemote'].' -P --log-file=shell-logs/rc_$(date +"%FT-%H-%M-%S").txt');
 }
 
 }
