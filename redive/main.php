@@ -229,7 +229,7 @@ function do_commit($TruthVersion, $db = NULL, $extraMsg = '') {
   exec('git commit -m "'.implode("\n", $commitMessage).'"');
   exec('git rev-parse HEAD', $hash);
   $versionDiff['hash'] = $hash[0];
-  $diff_db = new PDO('sqlite:'.__DIR__.'/../db_diff.db');
+  $diff_db = new PDO('sqlite:'.__DIR__.'/db_diff.db');
   $col = ['ver','data'];
   $val = [$TruthVersion, brotli_compress(
     json_encode($versionDiff, JSON_UNESCAPED_SLASHES), 11, BROTLI_TEXT
